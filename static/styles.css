@@ -173,3 +173,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opa
 .map-load-error{background:#111!important}
 @media(max-width:900px){.world-fallback{height:430px;min-height:320px}}
 @media(max-width:600px){.world-fallback{height:340px;min-height:280px}}
+
+
+/* Dark monochrome basemap: dark native tiles, inverted grayscale OSM fallback */
+.world-map{background:#101010!important}
+.world-map .leaflet-container{background:#101010!important}
+.world-map .leaflet-tile-pane{filter:grayscale(1) brightness(.9) contrast(1.08)}
+.world-map.map-tiles-invert .leaflet-tile-pane{filter:grayscale(1) invert(.88) hue-rotate(180deg) brightness(.72) contrast(1.12)}
+.world-map.map-tiles-dark .leaflet-tile-pane{filter:grayscale(1) brightness(.88) contrast(1.12)}
+.world-map .leaflet-control-scale-line{background:#111;color:#ddd;border-color:#777}
+.world-map .leaflet-bar a{background:#171717;color:#f2f2f2;border-color:#444}
+.world-map .leaflet-bar a:hover{background:#292929;color:#fff}
+.world-map .leaflet-tooltip{background:#111;color:#eee;border:1px solid #555;box-shadow:0 3px 14px #0009}
+.world-map .leaflet-tooltip:before{border-right-color:#555;border-left-color:#555}

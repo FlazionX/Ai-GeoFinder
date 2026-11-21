@@ -168,3 +168,12 @@ def test_gemini_api_error_is_reported(monkeypatch):
     monkeypatch.setattr(project.SESSION, "post", lambda *args, **kwargs: FakeResponse())
     with pytest.raises(RuntimeError, match="Gemini API \\(404\\): model not found"):
         project.analyze_with_gemini(make_image())
+
+
+
+def test_example_gemini_key_is_not_marked_configured(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "your_gemini_api_key_here")
+    response = project.app.test_client().get("/api/health")
+    assert response.status_code == 200
+    assert response.json["ai_configured"] is False
+    assert project.get_gemini_api_key() == ""

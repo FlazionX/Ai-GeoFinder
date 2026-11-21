@@ -13,11 +13,12 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from PIL import Image, UnidentifiedImageError
 
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+RESOURCE_DIR = Path(getattr(__import__("sys"), "_MEIPASS", Path(__file__).resolve().parent))
+APP_DIR = Path(__import__("sys").executable).resolve().parent if getattr(__import__("sys"), "frozen", False) else Path(__file__).resolve().parent
+load_dotenv(APP_DIR / ".env")
 MAX_UPLOAD = 12 * 1024 * 1024
 ALLOWED = {"JPEG", "PNG", "WEBP"}
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
+app = Flask(__name__, template_folder=str(RESOURCE_DIR / "templates"), static_folder=str(RESOURCE_DIR / "static"))
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD
 
 

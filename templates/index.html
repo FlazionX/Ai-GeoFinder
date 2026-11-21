@@ -13,6 +13,12 @@
 <nav class="tabs" aria-label="Разделы">
 <button class="tab active" data-tab="photo">◈ Фотоанализ</button><button class="tab" data-tab="ip">⌁ IP Lookup</button><button class="tab" data-tab="history">◷ История</button>
 </nav>
+<section class="map-stage" aria-label="Карта мира">
+  <div class="map-stage-top"><div><span class="eyebrow"><span></span> GLOBAL LOCATION MAP</div><h2>Карта предполагаемых мест</h2><p>Загрузи фотографию — после анализа кандидаты появятся здесь.</p></div>
+  <div class="map-stage-status"><span class="status-dot"></span><span id="mapStatus">Карта мира готова</span></div>
+  <div id="map" class="map world-map"></div>
+  <div class="map-legend">Маркеры — приблизительные центры регионов, а не точка съёмки.</div>
+</section>
 <section class="tab-page active" id="page-photo">
 <div class="workspace">
 <div class="panel upload-panel"><div class="panel-head"><div><span class="step">01</span><h2>Изображение</h2></div><span class="micro">JPG · PNG · WEBP</span></div>
@@ -28,7 +34,7 @@
 <div class="empty-state" id="emptyState"><div class="radar"><span></span><span></span><span></span><b>◎</b></div><strong>Ожидает изображение</strong><p>Загрузи фото и запусти анализ</p></div>
 <div class="loading-state" id="loadingState" hidden><div class="loader"></div><strong>Изучаем визуальные признаки</strong><p>Сравниваем архитектуру, ландшафт и ориентиры…</p></div>
 <div id="results" hidden><div class="summary" id="summary"></div><div class="result-section"><div class="section-label">ВОЗМОЖНЫЕ РЕГИОНЫ</div><div id="candidates" class="candidate-list"></div></div>
-<div class="result-section"><div class="section-label">КАРТА ГЕОГРАФИЧЕСКИХ ГИПОТЕЗ</div><div id="map" class="map"></div><div class="map-legend">Маркеры показывают приблизительные центры регионов, а не место съёмки.</div></div>
+
 <div class="result-section"><div class="section-label">ВИЗУАЛЬНЫЕ ПОДСКАЗКИ</div><ul id="clues" class="clue-list"></ul></div>
 <div class="result-section"><div class="section-label">IMAGE INTELLIGENCE</div><div id="imageInfo" class="info-grid"></div></div>
 <div class="result-section"><div class="section-label">ОГРАНИЧЕНИЯ И НЕОПРЕДЕЛЁННОСТЬ</div><ul id="limitations" class="clue-list muted-list"></ul></div>

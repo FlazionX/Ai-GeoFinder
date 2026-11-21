@@ -18,7 +18,7 @@ from threading import Thread
 from werkzeug.serving import make_server
 
 import requests
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key, unset_key
 from flask import Flask, jsonify, render_template, request
 from PIL import Image, UnidentifiedImageError
 
@@ -214,6 +214,34 @@ def index():
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True, "ai_configured": bool(os.getenv("GEMINI_API_KEY", "").strip())})
+
+
+@app.post("/api/settings/gemini")
+def save_gemini_settings():
+    """Store the user's Gemini key locally beside the app; never return the key."""
+    payload = request.get_json(silent=True) or {}
+    api_key = str(payload.get("api_key", "")).strip()
+    if len(api_key) < 20 or len(api_key) > 512 or any(ch.isspace() for ch in api_key):
+        return jsonify({"error": "Проверь API-ключ. Он должен содержать не менее 20 символов без пробелов."}), 400
+    env_path = APP_DIR / ".env"
+    try:
+        set_key(str(env_path), "GEMINI_API_KEY", api_key, quote_mode="never")
+        os.environ["GEMINI_API_KEY"] = api_key
+        return jsonify({"ok": True, "configured": True, "message": "API-ключ сохранён на этом компьютере."})
+    except OSError:
+        return jsonify({"error": "Не удалось сохранить .env. Проверь права на запись в папку программы."}), 500
+
+
+@app.delete("/api/settings/gemini")
+def remove_gemini_settings():
+    env_path = APP_DIR / ".env"
+    try:
+        if env_path.exists():
+            unset_key(str(env_path), "GEMINI_API_KEY")
+        os.environ.pop("GEMINI_API_KEY", None)
+        return jsonify({"ok": True, "configured": False, "message": "API-ключ удалён с этого компьютера."})
+    except OSError:
+        return jsonify({"error": "Не удалось изменить .env. Проверь права на запись в папку программы."}), 500
 
 
 @app.post("/api/analyze")

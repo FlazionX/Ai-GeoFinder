@@ -11,7 +11,7 @@
 <main class="shell">
 <section class="hero"><div class="eyebrow"><span></span> VISUAL LOCATION INTELLIGENCE</div><h1>Найди место<br><em>по одному снимку.</em></h1><p class="hero-copy">AI-анализ визуальных признаков с отображением возможных регионов на интерактивной карте мира.</p></section>
 <nav class="tabs" aria-label="Разделы">
-<button class="tab active" data-tab="photo">◈ Фотоанализ</button><button class="tab" data-tab="ip">⌁ IP Lookup</button><button class="tab" data-tab="history">◷ История</button>
+<button class="tab active" data-tab="photo">◈ Фотоанализ</button><button class="tab" data-tab="ip">⌁ IP Lookup</button><button class="tab" data-tab="history">◷ История</button><button class="tab" data-tab="settings">⚙ Настройка ИИ</button>
 </nav>
 <section class="tab-page active" id="page-photo">
 <section class="map-stage" aria-label="Карта мира">
@@ -48,19 +48,19 @@
 <div class="info-grid ip-grid" id="ipInfo"></div><div id="ipMap" class="map ip-map"></div><p class="notice" id="ipNotice"></p></div>
 <p class="privacy-note">IP-запрос передаётся сервису ipwho.is. Результат приблизительный и обычно указывает на сеть/узел провайдера, а не точное положение устройства. Частные и локальные IP блокируются.</p></div></section>
 <section class="tab-page" id="page-history" hidden><div class="panel"><div class="panel-head"><div><span class="step">03</span><h2>История исследований</h2></div><button class="small-btn" id="refreshHistory">Обновить</button></div><div id="historyList" class="history-list"><div class="empty-state compact"><strong>Загружаем историю…</strong></div></div></div></section>
+<section class="tab-page" id="page-settings" hidden>
+<div class="panel ai-settings-page"><div class="panel-head"><div><span class="step">04</span><h2>Подключение ИИ</h2></div><span class="live-tag"><i></i> GEMINI API</span></div>
+<p class="section-intro">Чтобы AI GeoFinder мог анализировать фотографии, подключи Google Gemini. Это делается один раз — ключ сохранится на твоём компьютере.</p>
+<div class="setup-steps">
+<article class="setup-step"><span class="setup-number">01</span><div><h3>Открой Google AI Studio</h3><p>Перейди на официальный сайт Google, где создаются ключи доступа к Gemini.</p><a class="settings-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Открыть Google AI Studio ↗</a></div></article>
+<article class="setup-step"><span class="setup-number">02</span><div><h3>Создай API-ключ</h3><p>Войди в Google-аккаунт, нажми <b>Create API key</b> и выбери проект Google Cloud, если сайт попросит. Скопируй созданный ключ.</p></div></article>
+<article class="setup-step"><span class="setup-number">03</span><div><h3>Вставь ключ сюда</h3><p>Вернись в AI GeoFinder и вставь скопированный ключ в поле ниже. Нажми «Сохранить ключ».</p></div></article></div>
+<div class="settings-inline-box"><label class="settings-label" for="geminiKeyInput">GEMINI API KEY</label>
+<div class="settings-key-row"><input id="geminiKeyInput" type="password" placeholder="Вставь сюда ключ из Google AI Studio" autocomplete="off" spellcheck="false"><button class="small-btn" id="toggleKeyVisibility" type="button">Показать</button></div>
+<div class="settings-key-status" id="geminiKeyStatus">Проверяем настройки…</div>
+<div class="settings-actions"><button class="small-btn" id="removeGeminiKey" type="button">Удалить ключ</button><button class="primary-btn" id="saveGeminiKey" type="button"><span>Сохранить ключ</span><b>↗</b></button></div></div>
+<div class="settings-help"><b>Что будет дальше?</b><p>После сохранения вернись во вкладку «Фотоанализ», загрузи фотографию и нажми «Анализировать фото». Программа отправит изображение в Gemini для поиска общих географических признаков.</p><p><b>Важно:</b> ключ хранится в файле .env рядом с программой. Не отправляй его другим людям и не публикуй на GitHub. Google может устанавливать квоты и условия оплаты для API.</p></div></div></section>
 <footer><span>AI GEO FINDER <span class="muted">/ BUILD 2.0</span></span><span>Географические гипотезы, не доказательства</span></footer>
-</main><section class="settings-backdrop" id="settingsModal" hidden>
-  <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-    <div class="settings-heading"><div><span class="eyebrow">LOCAL CONFIGURATION</span><h2 id="settingsTitle">Настройки ИИ</h2></div><button class="icon-btn" id="settingsClose" type="button" aria-label="Закрыть">×</button></div>
-    <p class="settings-description">Подключи Google Gemini, чтобы включить анализ фотографий. Ключ хранится локально в файле .env рядом с программой и не отправляется в AI GeoFinder на сторонний сервер.</p>
-    <label class="settings-label" for="geminiKeyInput">GEMINI API KEY</label>
-    <div class="settings-key-row"><input id="geminiKeyInput" type="password" placeholder="Вставь ключ Gemini" autocomplete="off" spellcheck="false"><button class="small-btn" id="toggleKeyVisibility" type="button">Показать</button></div>
-    <div class="settings-key-status" id="geminiKeyStatus">Проверяем настройки…</div>
-    <div class="settings-actions"><button class="small-btn" id="removeGeminiKey" type="button">Удалить ключ</button><button class="primary-btn" id="saveGeminiKey" type="button"><span>Сохранить ключ</span><b>↗</b></button></div>
-    <p class="settings-footnote">Ключ используется для запросов к Google Gemini API. Не публикуй его и не добавляй в GitHub.</p>
-    <a class="settings-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Получить API-ключ в Google AI Studio ↗</a>
-  </div>
-</section>
-<div class="toast" id="toast"></div>
+</main><div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script><script src="{{ url_for('static', filename='app.js') }}"></script>
 </body></html>

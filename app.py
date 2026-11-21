@@ -27,6 +27,9 @@ APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
 load_dotenv(APP_DIR / ".env")
 DB_PATH = APP_DIR / "geofinder_history.sqlite3"
 MAX_UPLOAD = 12 * 1024 * 1024
+MAX_IMAGE_PIXELS = 40_000_000
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+LEGACY_GEMINI_MODELS = {"gemini-2.5-flash": DEFAULT_GEMINI_MODEL}
 ALLOWED = {"JPEG", "PNG", "WEBP"}
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "AI-GeoFinder/2.0 (desktop research tool)"})
@@ -93,6 +96,8 @@ def inspect_image(data: bytes) -> dict:
         width, height = image.size
         if width < 64 or height < 64:
             raise ValueError("Изображение слишком маленькое. Минимум 64×64.")
+        if width * height > MAX_IMAGE_PIXELS:
+            raise ValueError("Изображение слишком большое по разрешению. Максимум 40 мегапикселей.")
         metadata = get_exif_info(image)
         image.thumbnail((1800, 1800))
         clean = Image.new("RGB", image.size)
@@ -106,8 +111,8 @@ def inspect_image(data: bytes) -> dict:
         return {"bytes": output.getvalue(), "width": width, "height": height,
                 "format": image_format, "size_bytes": len(data),
                 "sha256": hashlib.sha256(data).hexdigest(), "metadata": metadata}
-    except UnidentifiedImageError as exc:
-        raise ValueError("Не удалось прочитать изображение.") from exc
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        raise ValueError("Не удалось прочитать изображение или оно повреждено.") from exc
 
 
 def geocode_candidate(candidate: dict) -> dict:
@@ -134,11 +139,28 @@ def geocode_candidate(candidate: dict) -> dict:
     return {**candidate, "map_match": None}
 
 
+def get_gemini_model() -> str:
+    """Return a supported model and transparently migrate the retired default."""
+    configured = os.getenv("GEMINI_MODEL", "").strip()
+    model = configured.removeprefix("models/") or DEFAULT_GEMINI_MODEL
+    if model in LEGACY_GEMINI_MODELS:
+        model = LEGACY_GEMINI_MODELS[model]
+        os.environ["GEMINI_MODEL"] = model
+        env_path = APP_DIR / ".env"
+        if env_path.exists():
+            try:
+                set_key(str(env_path), "GEMINI_MODEL", model, quote_mode="never")
+            except OSError:
+                # Runtime migration still works even if the folder is read-only.
+                pass
+    return model
+
+
 def analyze_with_gemini(image_bytes: bytes, deep_scan: bool = False) -> dict:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("Добавьте GEMINI_API_KEY в файл .env, чтобы включить ИИ-анализ.")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        raise RuntimeError("Добавьте GEMINI_API_KEY в раздел «Настройка ИИ», чтобы включить анализ.")
+    model = get_gemini_model()
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     depth = ("Perform a deeper multi-pass style reasoning: compare competing regions, identify supporting and contradicting clues, "
              "give up to 5 broad candidate regions, and provide a detailed report.") if deep_scan else (
@@ -156,7 +178,7 @@ Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
         {"text": prompt},
         {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode("ascii")}}
     ]}], "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
-    response = SESSION.post(endpoint, params={"key": api_key}, json=payload, timeout=100)
+    response = SESSION.post(endpoint, headers={"x-goog-api-key": api_key}, json=payload, timeout=100)
     if response.status_code >= 400:
         try:
             message = response.json().get("error", {}).get("message", response.text)
@@ -300,6 +322,7 @@ def history():
 
 @app.delete("/api/history/<int:item_id>")
 def delete_history(item_id):
+    init_db()
     with db() as conn:
         cursor = conn.execute("DELETE FROM investigations WHERE id=?", (item_id,))
     return jsonify({"deleted": cursor.rowcount > 0})

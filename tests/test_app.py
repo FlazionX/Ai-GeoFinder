@@ -110,7 +110,7 @@ def test_reject_invalid_gemini_key():
 def test_reject_image_over_pixel_limit(monkeypatch):
     monkeypatch.setattr(project, "MAX_IMAGE_PIXELS", 1000)
     with pytest.raises(ValueError, match="40 мегапикселей"):
-        project.inspect_image(make_image(size=(40, 40)))
+        project.inspect_image(make_image(size=(64, 64)))
 
 
 def test_delete_history_when_database_does_not_exist(monkeypatch, tmp_path):

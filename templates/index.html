@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090b0d">
 <title>AI GeoFinder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"><link id="leafletCss" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
 </head><body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
 <header class="topbar"><a class="brand" href="/"><span class="brand-mark">G</span><span>AI GEO<span class="muted">FINDER</span></span></a>
@@ -50,5 +50,5 @@
 <section class="tab-page" id="page-history" hidden><div class="panel"><div class="panel-head"><div><span class="step">03</span><h2>История исследований</h2></div><button class="small-btn" id="refreshHistory">Обновить</button></div><div id="historyList" class="history-list"><div class="empty-state compact"><strong>Загружаем историю…</strong></div></div></div></section>
 <footer><span>AI GEO FINDER <span class="muted">/ BUILD 2.0</span></span><span>Географические гипотезы, не доказательства</span></footer>
 </main><div class="toast" id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"></script><script src="{{ url_for('static', filename='app.js') }}"></script>
 </body></html>

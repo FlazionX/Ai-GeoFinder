@@ -1,56 +1,48 @@
 <!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#090b0d">
-  <title>AI GeoFinder</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-</head>
-<body>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090b0d">
+<title>AI GeoFinder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head><body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
-<header class="topbar">
-  <a class="brand" href="/"><span class="brand-mark">G</span><span>AI GEO<span class="muted">FINDER</span></span></a>
-  <div class="top-right"><span class="status-dot"></span><span id="apiStatus">Проверка системы</span><button class="icon-btn" id="settingsBtn" title="Настройки">⚙</button></div>
-</header>
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark">G</span><span>AI GEO<span class="muted">FINDER</span></span></a>
+<div class="top-right"><span class="status-dot"></span><span id="apiStatus">Проверка системы</span><button class="icon-btn" id="settingsBtn" title="Настройки">⚙</button></div></header>
 <main class="shell">
-  <section class="hero">
-    <div class="eyebrow"><span></span> VISUAL LOCATION INTELLIGENCE</div>
-    <h1>Где был сделан<br><em>этот снимок?</em></h1>
-    <p class="hero-copy">Загрузи фотографию. ИИ изучит архитектуру, природу и визуальные детали, чтобы предложить возможные регионы.</p>
-  </section>
-  <section class="workspace">
-    <div class="panel upload-panel">
-      <div class="panel-head"><div><span class="step">01</span><h2>Изображение</h2></div><span class="micro">JPG · PNG · WEBP</span></div>
-      <label class="dropzone" id="dropzone" for="fileInput">
-        <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp">
-        <div class="upload-content" id="uploadContent"><div class="upload-icon">↥</div><strong>Перетащи фото сюда</strong><span>или нажми, чтобы выбрать файл</span><small>Максимальный размер — 12 МБ</small></div>
-        <img id="preview" alt="Предпросмотр изображения" hidden>
-        <button class="remove-image" id="removeImage" type="button" hidden>×</button>
-      </label>
-      <div class="file-meta" id="fileMeta">Файл не выбран</div>
-      <button class="primary-btn" id="analyzeBtn" disabled><span>Анализировать фото</span><b>↗</b></button>
-      <p class="privacy-note">⌁ Фото отправляется в Gemini API для анализа. EXIF GPS-координаты не передаются ИИ и не отображаются.</p>
-    </div>
-    <div class="panel result-panel">
-      <div class="panel-head"><div><span class="step">02</span><h2>Результат анализа</h2></div><span class="live-tag"><i></i> AI ENGINE</span></div>
-      <div class="empty-state" id="emptyState"><div class="radar"><span></span><span></span><span></span><b>◎</b></div><strong>Ожидает изображение</strong><p>Результаты анализа появятся здесь</p></div>
-      <div class="loading-state" id="loadingState" hidden><div class="loader"></div><strong>Изучаем визуальные признаки</strong><p>Это может занять несколько секунд…</p></div>
-      <div id="results" hidden>
-        <div class="summary" id="summary"></div>
-        <div class="result-section"><div class="section-label">ВОЗМОЖНЫЕ РЕГИОНЫ</div><div id="candidates" class="candidate-list"></div></div>
-        <div class="result-section"><div class="section-label">ВИЗУАЛЬНЫЕ ПОДСКАЗКИ</div><ul id="clues" class="clue-list"></ul></div>
-        <div class="result-section"><div class="section-label">ОГРАНИЧЕНИЯ</div><ul id="limitations" class="clue-list muted-list"></ul></div>
-        <div class="notice" id="notice"></div>
-      </div>
-      <div class="error-box" id="errorBox" hidden></div>
-    </div>
-  </section>
-  <footer><span>AI GEO FINDER <span class="muted">/ BUILD 1.0</span></span><span>Результат ИИ — ориентировочная гипотеза</span></footer>
-</main>
-<div class="toast" id="toast"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<section class="hero"><div class="eyebrow"><span></span> VISUAL LOCATION INTELLIGENCE</div><h1>Исследуй мир<br><em>по цифровым следам.</em></h1><p class="hero-copy">Анализ фотографий, географические гипотезы, IP-информация и метаданные — в одной исследовательской панели.</p></section>
+<nav class="tabs" aria-label="Разделы">
+<button class="tab active" data-tab="photo">◈ Фотоанализ</button><button class="tab" data-tab="ip">⌁ IP Lookup</button><button class="tab" data-tab="history">◷ История</button>
+</nav>
+<section class="tab-page active" id="page-photo">
+<div class="workspace">
+<div class="panel upload-panel"><div class="panel-head"><div><span class="step">01</span><h2>Изображение</h2></div><span class="micro">JPG · PNG · WEBP</span></div>
+<label class="dropzone" id="dropzone" for="fileInput"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp">
+<div class="upload-content" id="uploadContent"><div class="upload-icon">↥</div><strong>Перетащи фото сюда</strong><span>или нажми, чтобы выбрать файл</span><small>Максимальный размер — 12 МБ</small></div>
+<img id="preview" alt="Предпросмотр изображения" hidden><canvas id="cropCanvas" hidden></canvas><div id="cropRect" hidden></div><button class="remove-image" id="removeImage" type="button" hidden>×</button></label>
+<div class="file-meta" id="fileMeta">Файл не выбран</div>
+<div class="tool-row"><label class="toggle"><input type="checkbox" id="deepScan"><span></span><b>Deep Scan</b></label><span class="micro">Углублённое сравнение регионов</span></div>
+<div class="crop-tools"><button class="small-btn" id="cropBtn" disabled>Выделить область</button><button class="small-btn" id="resetCrop" disabled>Сбросить обрезку</button></div>
+<button class="primary-btn" id="analyzeBtn" disabled><span>Анализировать фото</span><b>↗</b></button>
+<p class="privacy-note">Изображение отправляется в Gemini только после нажатия кнопки анализа. EXIF GPS не передаётся ИИ и не отображается.</p></div>
+<div class="panel result-panel"><div class="panel-head"><div><span class="step">02</span><h2>Результат анализа</h2></div><span class="live-tag"><i></i> AI ENGINE</span></div>
+<div class="empty-state" id="emptyState"><div class="radar"><span></span><span></span><span></span><b>◎</b></div><strong>Ожидает изображение</strong><p>Загрузи фото и запусти анализ</p></div>
+<div class="loading-state" id="loadingState" hidden><div class="loader"></div><strong>Изучаем визуальные признаки</strong><p>Сравниваем архитектуру, ландшафт и ориентиры…</p></div>
+<div id="results" hidden><div class="summary" id="summary"></div><div class="result-section"><div class="section-label">ВОЗМОЖНЫЕ РЕГИОНЫ</div><div id="candidates" class="candidate-list"></div></div>
+<div class="result-section"><div class="section-label">КАРТА ГЕОГРАФИЧЕСКИХ ГИПОТЕЗ</div><div id="map" class="map"></div><div class="map-legend">Маркеры показывают приблизительные центры регионов, а не место съёмки.</div></div>
+<div class="result-section"><div class="section-label">ВИЗУАЛЬНЫЕ ПОДСКАЗКИ</div><ul id="clues" class="clue-list"></ul></div>
+<div class="result-section"><div class="section-label">IMAGE INTELLIGENCE</div><div id="imageInfo" class="info-grid"></div></div>
+<div class="result-section"><div class="section-label">ОГРАНИЧЕНИЯ И НЕОПРЕДЕЛЁННОСТЬ</div><ul id="limitations" class="clue-list muted-list"></ul></div>
+<div class="report" id="report" hidden></div><div class="notice" id="notice"></div></div>
+<div class="error-box" id="errorBox" hidden></div></div></div></section>
+<section class="tab-page" id="page-ip" hidden><div class="panel ip-panel"><div class="panel-head"><div><span class="step">01</span><h2>IP Address Intelligence</h2></div><span class="live-tag"><i></i> PUBLIC IP DATA</span></div>
+<p class="section-intro">Введи публичный IPv4 или IPv6 адрес, чтобы получить ориентировочную информацию о сети и регионе.</p>
+<div class="ip-form"><input id="ipInput" type="text" placeholder="Например, 8.8.8.8" autocomplete="off"><button class="primary-btn" id="ipBtn"><span>Определить IP</span><b>↗</b></button></div>
+<div class="loading-state" id="ipLoading" hidden><div class="loader"></div><strong>Запрашиваем сведения об IP</strong></div><div class="error-box" id="ipError" hidden></div>
+<div id="ipResult" hidden><div class="ip-summary"><div><span class="section-label">IP ADDRESS</span><strong id="ipValue"></strong></div><span class="live-tag" id="ipType"></span></div>
+<div class="info-grid ip-grid" id="ipInfo"></div><div id="ipMap" class="map ip-map"></div><p class="notice" id="ipNotice"></p></div>
+<p class="privacy-note">IP-запрос передаётся сервису ipwho.is. Результат приблизительный и обычно указывает на сеть/узел провайдера, а не точное положение устройства. Частные и локальные IP блокируются.</p></div></section>
+<section class="tab-page" id="page-history" hidden><div class="panel"><div class="panel-head"><div><span class="step">03</span><h2>История исследований</h2></div><button class="small-btn" id="refreshHistory">Обновить</button></div><div id="historyList" class="history-list"><div class="empty-state compact"><strong>Загружаем историю…</strong></div></div></div></section>
+<footer><span>AI GEO FINDER <span class="muted">/ BUILD 2.0</span></span><span>Географические гипотезы, не доказательства</span></footer>
+</main><div class="toast" id="toast"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="{{ url_for('static', filename='app.js') }}"></script>
 </body></html>

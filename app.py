@@ -1,29 +1,79 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
+import ipaddress
+import json
 import os
 import re
+import sqlite3
+import sys
 import webbrowser
-from threading import Timer
+from datetime import datetime, timezone
 from pathlib import Path
+from threading import Timer
 
 import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from PIL import Image, UnidentifiedImageError
 
-RESOURCE_DIR = Path(getattr(__import__("sys"), "_MEIPASS", Path(__file__).resolve().parent))
-APP_DIR = Path(__import__("sys").executable).resolve().parent if getattr(__import__("sys"), "frozen", False) else Path(__file__).resolve().parent
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 load_dotenv(APP_DIR / ".env")
+DB_PATH = APP_DIR / "geofinder_history.sqlite3"
 MAX_UPLOAD = 12 * 1024 * 1024
 ALLOWED = {"JPEG", "PNG", "WEBP"}
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": "AI-GeoFinder/2.0 (desktop research tool)"})
 app = Flask(__name__, template_folder=str(RESOURCE_DIR / "templates"), static_folder=str(RESOURCE_DIR / "static"))
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD
 
 
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with db() as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS investigations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+            title TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL
+        )""")
+
+
+def save_history(kind: str, title: str, payload: dict):
+    init_db()
+    with db() as conn:
+        conn.execute("INSERT INTO investigations(kind,title,created_at,payload) VALUES(?,?,?,?)",
+                     (kind, title[:180], datetime.now(timezone.utc).isoformat(), json.dumps(payload, ensure_ascii=False)))
+
+
+def get_exif_info(image: Image.Image) -> dict:
+    exif = image.getexif()
+    def tag(name):
+        for key, value in exif.items():
+            try:
+                from PIL.ExifTags import TAGS
+                if TAGS.get(key) == name:
+                    return str(value)[:120]
+            except Exception:
+                pass
+        return None
+    gps_present = False
+    try:
+        gps_present = bool(exif.get_ifd(0x8825)) if exif else False
+    except Exception:
+        gps_present = False
+    return {"camera_make": tag("Make"), "camera_model": tag("Model"),
+            "captured_at": tag("DateTimeOriginal") or tag("DateTime"),
+            "orientation": tag("Orientation"), "gps_metadata_present": gps_present}
+
+
 def inspect_image(data: bytes) -> dict:
-    """Validate and normalize an uploaded image without exposing EXIF coordinates."""
     try:
         image = Image.open(io.BytesIO(data))
         image_format = (image.format or "").upper()
@@ -32,14 +82,8 @@ def inspect_image(data: bytes) -> dict:
         width, height = image.size
         if width < 64 or height < 64:
             raise ValueError("Изображение слишком маленькое. Минимум 64×64.")
-        has_gps = False
-        try:
-            exif = image.getexif()
-            gps = exif.get_ifd(0x8825) if exif else {}
-            has_gps = bool(gps)
-        except Exception:
-            has_gps = False
-        image.thumbnail((1600, 1600))
+        metadata = get_exif_info(image)
+        image.thumbnail((1800, 1800))
         clean = Image.new("RGB", image.size)
         if image.mode in ("RGBA", "LA"):
             rgba = image.convert("RGBA")
@@ -47,51 +91,107 @@ def inspect_image(data: bytes) -> dict:
         else:
             clean.paste(image.convert("RGB"))
         output = io.BytesIO()
-        clean.save(output, format="JPEG", quality=88, optimize=True)
+        clean.save(output, format="JPEG", quality=90, optimize=True)
         return {"bytes": output.getvalue(), "width": width, "height": height,
-                "format": image_format, "has_gps": has_gps}
+                "format": image_format, "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(), "metadata": metadata}
     except UnidentifiedImageError as exc:
         raise ValueError("Не удалось прочитать изображение.") from exc
 
 
-def analyze_with_gemini(image_bytes: bytes) -> dict:
+def geocode_candidate(candidate: dict) -> dict:
+    country = str(candidate.get("country", "")).strip()[:100]
+    region = str(candidate.get("region", "")).strip()[:100]
+    if not country and not region:
+        return {**candidate, "map_match": None}
+    query = ", ".join(x for x in (region, country) if x)
+    try:
+        response = SESSION.get("https://nominatim.openstreetmap.org/search",
+                               params={"q": query, "format": "jsonv2", "limit": 1,
+                                       "addressdetails": 0}, timeout=12)
+        response.raise_for_status()
+        hits = response.json()
+        if hits:
+            hit = hits[0]
+            return {**candidate, "map_match": {
+                "lat": float(hit["lat"]), "lon": float(hit["lon"]),
+                "label": str(hit.get("display_name", query))[:220],
+                "source": "OpenStreetMap / Nominatim"}}
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        pass
+    return {**candidate, "map_match": None}
+
+
+def analyze_with_gemini(image_bytes: bytes, deep_scan: bool = False) -> dict:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("Добавьте GEMINI_API_KEY в файл .env, чтобы включить ИИ-анализ.")
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    prompt = """Analyze this image for broad geographic clues. Return ONLY valid JSON with keys:
-summary (one concise sentence), country_candidates (array of objects with country, region, confidence, clues),
-visual_clues (array of strings), limitations (array of strings).
-Confidence must be a rough heuristic from 0 to 100, not a statistical probability.
-Never guess an exact address, private residence, person's identity, or precise coordinates.
-Do not infer a person's location. Use visible public landmarks, architecture, vegetation, terrain,
-road markings and language only. If evidence is weak, say so and keep candidates broad.
-Do not use or request EXIF/GPS metadata."""
-    payload = {
-        "contents": [{"parts": [
-            {"text": prompt},
-            {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode("ascii")}}
-        ]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
-    }
-    response = requests.post(endpoint, params={"key": api_key}, json=payload, timeout=90)
+    depth = ("Perform a deeper multi-pass style reasoning: compare competing regions, identify supporting and contradicting clues, "
+             "give up to 5 broad candidate regions, and provide a detailed report.") if deep_scan else (
+             "Perform a focused first-pass analysis and provide up to 3 broad candidate regions.")
+    prompt = f"""Analyze this photograph for broad geographic clues. {depth}
+Return ONLY valid JSON with keys:
+summary (one concise sentence), country_candidates (array of objects with country, region, confidence, clues, counter_clues),
+visual_clues (array of strings), limitations (array of strings), report (string).
+Confidence is a rough heuristic from 0 to 100, never a statistical probability.
+Use visible public landmarks, architecture, signs, road markings, vegetation and terrain.
+Do not invent a landmark, coordinates, exact address, private residence, person's identity or whereabouts.
+Do not infer a person's location. If evidence is weak, state that clearly.
+Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
+    payload = {"contents": [{"parts": [
+        {"text": prompt},
+        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode("ascii")}}
+    ]}], "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
+    response = SESSION.post(endpoint, params={"key": api_key}, json=payload, timeout=100)
     if response.status_code >= 400:
         try:
             message = response.json().get("error", {}).get("message", response.text)
         except Exception:
             message = response.text
-        raise RuntimeError(f"Ошибка Gemini API ({response.status_code}): {message[:500]}")
-    result = response.json()
+        raise RuntimeError(f"Ошибка Gemini API ({response.status_code}): {message[:450]}")
     try:
-        import json
-        raw = result["candidates"][0]["content"]["parts"][0]["text"]
-        parsed = json.loads(raw)
+        result = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = json.loads(result)
         if not isinstance(parsed, dict):
             raise ValueError()
+        candidates = parsed.get("country_candidates", [])
+        parsed["country_candidates"] = [geocode_candidate(x) for x in candidates[:5] if isinstance(x, dict)]
+        parsed["deep_scan"] = deep_scan
         return parsed
     except (KeyError, IndexError, ValueError, TypeError) as exc:
         raise RuntimeError("ИИ вернул ответ в неожиданном формате. Попробуйте другое изображение.") from exc
+
+
+def lookup_ip(value: str) -> dict:
+    value = value.strip()
+    try:
+        parsed = ipaddress.ip_address(value)
+    except ValueError as exc:
+        raise ValueError("Введите корректный IPv4 или IPv6 адрес.") from exc
+    if not parsed.is_global:
+        raise ValueError("Частные, локальные и зарезервированные IP-адреса нельзя геолоцировать.")
+    response = SESSION.get(f"https://ipwho.is/{value}", timeout=15)
+    response.raise_for_status()
+    data = response.json()
+    if not data.get("success", False):
+        raise ValueError(data.get("message", "Сервис не смог определить этот IP-адрес."))
+    connection = data.get("connection") or {}
+    timezone_data = data.get("timezone") or {}
+    return {
+        "ip": value, "type": "IPv4" if parsed.version == 4 else "IPv6",
+        "country": data.get("country"), "country_code": data.get("country_code"),
+        "region": data.get("region"), "city": data.get("city"),
+        "postal": data.get("postal"), "latitude": data.get("latitude"),
+        "longitude": data.get("longitude"), "isp": connection.get("isp"),
+        "organization": connection.get("org"), "asn": connection.get("asn"),
+        "timezone": timezone_data.get("id"),
+        "map_url": (f"https://www.openstreetmap.org/?mlat={data.get('latitude')}&mlon={data.get('longitude')}#map=8/{data.get('latitude')}/{data.get('longitude')}"
+                    if data.get("latitude") is not None and data.get("longitude") is not None else None),
+        "accuracy_note": "IP-геолокация приблизительна: обычно показывает сеть или узел провайдера, а не точное местоположение устройства.",
+        "source": "ipwho.is"
+    }
 
 
 @app.get("/")
@@ -112,21 +212,52 @@ def analyze():
     data = uploaded.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
         return jsonify({"error": "Файл больше 12 МБ."}), 413
+    deep_scan = request.form.get("deep_scan", "false").lower() == "true"
     try:
         checked = inspect_image(data)
-        result = analyze_with_gemini(checked["bytes"])
-        return jsonify({
-            "result": result,
-            "image": {"width": checked["width"], "height": checked["height"],
-                      "format": checked["format"], "has_gps_metadata": checked["has_gps"]},
-            "notice": "Это предположения по визуальным признакам, а не точное определение места."
-        })
+        result = analyze_with_gemini(checked["bytes"], deep_scan)
+        response_data = {"result": result, "image": {
+            "width": checked["width"], "height": checked["height"],
+            "format": checked["format"], "size_bytes": checked["size_bytes"],
+            "sha256": checked["sha256"], "metadata": checked["metadata"]},
+            "notice": "Это географические гипотезы по визуальным признакам, а не подтверждённая геолокация."}
+        save_history("photo", uploaded.filename, response_data)
+        return jsonify(response_data)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
     except requests.RequestException:
-        return jsonify({"error": "Не удалось связаться с Gemini API. Проверьте интернет и повторите попытку."}), 502
+        return jsonify({"error": "Не удалось связаться с внешним сервисом. Проверьте интернет и повторите попытку."}), 502
+
+
+@app.post("/api/ip-lookup")
+def ip_lookup():
+    value = (request.json or {}).get("ip", "")
+    try:
+        result = lookup_ip(value)
+        save_history("ip", value, result)
+        return jsonify({"result": result})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except requests.RequestException:
+        return jsonify({"error": "Сервис IP-геолокации временно недоступен."}), 502
+
+
+@app.get("/api/history")
+def history():
+    init_db()
+    with db() as conn:
+        rows = conn.execute("SELECT id,kind,title,created_at,payload FROM investigations ORDER BY id DESC LIMIT 50").fetchall()
+    return jsonify({"items": [{"id": r["id"], "kind": r["kind"], "title": r["title"],
+                              "created_at": r["created_at"], "payload": json.loads(r["payload"])} for r in rows]})
+
+
+@app.delete("/api/history/<int:item_id>")
+def delete_history(item_id):
+    with db() as conn:
+        cursor = conn.execute("DELETE FROM investigations WHERE id=?", (item_id,))
+    return jsonify({"deleted": cursor.rowcount > 0})
 
 
 @app.errorhandler(413)
@@ -135,6 +266,7 @@ def too_large(_error):
 
 
 def run_desktop():
+    init_db()
     port = int(os.getenv("PORT", "5000"))
     url = f"http://127.0.0.1:{port}"
     Timer(1.2, lambda: webbrowser.open(url)).start()

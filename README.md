@@ -30,11 +30,11 @@ Native Windows desktop application with a GeoSpy-inspired global map, photo inte
 - View and delete individual history entries.
 
 ## Setup
-Requires Python 3.11+ and a Gemini API key.
+Requires Python 3.11+ and a Gemini API key. The app uses the supported `gemini-3.8-flash` model by default and automatically migrates the retired `gemini-2.5-flash` setting.
 
 1. Download/clone the repository.
 2. Run `start.bat`.
-3. Open `.env` and set `GEMINI_API_KEY=your_key`.
+3. Open the in-app **Настройка ИИ** section, follow the Google AI Studio link, create an API key, paste it into the field and save. Alternatively, set `GEMINI_API_KEY=your_key` in `.env`.
 4. Restart `start.bat`.
 
 The app binds only to `127.0.0.1`.
@@ -54,7 +54,7 @@ pytest -q
 ## Configuration
 ```env
 GEMINI_API_KEY=your_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 PORT=5000
 ```
 Never commit a real API key. The `.env` file is ignored by Git.

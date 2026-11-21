@@ -85,3 +85,21 @@ def test_history_save_and_delete(monkeypatch, tmp_path):
     deleted = client.delete(f"/api/history/{item_id}")
     assert deleted.status_code == 200 and deleted.json["deleted"] is True
     assert client.get("/api/history").json["items"] == []
+
+
+def test_save_and_remove_gemini_key(monkeypatch, tmp_path):
+    monkeypatch.setattr(project, "APP_DIR", tmp_path)
+    client = project.app.test_client()
+    response = client.post("/api/settings/gemini", json={"api_key": "AIza" + "x" * 36})
+    assert response.status_code == 200
+    assert "AIza" not in response.get_data(as_text=True)
+    assert "GEMINI_API_KEY=" in (tmp_path / ".env").read_text()
+    assert project.os.environ["GEMINI_API_KEY"] == "AIza" + "x" * 36
+    removed = client.delete("/api/settings/gemini")
+    assert removed.status_code == 200
+    assert "GEMINI_API_KEY" not in project.os.environ
+
+
+def test_reject_invalid_gemini_key():
+    response = project.app.test_client().post("/api/settings/gemini", json={"api_key": "short"})
+    assert response.status_code == 400

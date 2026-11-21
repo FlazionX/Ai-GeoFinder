@@ -30,7 +30,7 @@ ALLOWED = {"JPEG", "PNG", "WEBP"}
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "AI-GeoFinder/2.0 (desktop research tool)"})
 app = Flask(__name__, template_folder=str(RESOURCE_DIR / "templates"), static_folder=str(RESOURCE_DIR / "static"))
-app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 
 @contextmanager

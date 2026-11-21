@@ -28,7 +28,7 @@ def test_home_page():
 def test_inspect_valid_jpeg():
     result = project.inspect_image(make_image())
     assert result["format"] == "JPEG" and result["width"] == 128
-    assert result["height"] == 96 and result["bytes"].startswith(b"\\xff\\xd8")
+    assert result["height"] == 96 and result["bytes"].startswith(bytes([255, 216]))
     assert len(result["sha256"]) == 64
 
 

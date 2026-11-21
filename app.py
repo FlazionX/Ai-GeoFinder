@@ -9,6 +9,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
@@ -106,6 +107,7 @@ def geocode_candidate(candidate: dict) -> dict:
         return {**candidate, "map_match": None}
     query = ", ".join(x for x in (region, country) if x)
     try:
+        time.sleep(1.05)  # Respect the public Nominatim one-request-per-second policy.
         response = SESSION.get("https://nominatim.openstreetmap.org/search",
                                params={"q": query, "format": "jsonv2", "limit": 1,
                                        "addressdetails": 0}, timeout=12)

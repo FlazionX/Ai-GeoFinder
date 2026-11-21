@@ -209,13 +209,18 @@ def analyze():
     uploaded = request.files.get("image")
     if not uploaded or not uploaded.filename:
         return jsonify({"error": "Выберите изображение для анализа."}), 400
-    data = uploaded.read(MAX_UPLOAD + 1)
-    if len(data) > MAX_UPLOAD:
+    original_data = uploaded.read(MAX_UPLOAD + 1)
+    if len(original_data) > MAX_UPLOAD:
         return jsonify({"error": "Файл больше 12 МБ."}), 413
+    analysis_upload = request.files.get("analysis_image")
+    analysis_data = analysis_upload.read(MAX_UPLOAD + 1) if analysis_upload else original_data
+    if len(analysis_data) > MAX_UPLOAD:
+        return jsonify({"error": "Обрезанное изображение слишком большое."}), 413
     deep_scan = request.form.get("deep_scan", "false").lower() == "true"
     try:
-        checked = inspect_image(data)
-        result = analyze_with_gemini(checked["bytes"], deep_scan)
+        checked = inspect_image(original_data)
+        analysis_checked = inspect_image(analysis_data)
+        result = analyze_with_gemini(analysis_checked["bytes"], deep_scan)
         response_data = {"result": result, "image": {
             "width": checked["width"], "height": checked["height"],
             "format": checked["format"], "size_bytes": checked["size_bytes"],

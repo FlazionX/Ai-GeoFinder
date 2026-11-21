@@ -72,3 +72,16 @@ def test_invalid_ip_rejected():
 def test_ip_endpoint_invalid_input():
     response = project.app.test_client().post("/api/ip-lookup", json={"ip": "invalid"})
     assert response.status_code == 400
+
+
+def test_history_save_and_delete(monkeypatch, tmp_path):
+    monkeypatch.setattr(project, "DB_PATH", tmp_path / "history.sqlite3")
+    project.save_history("ip", "8.8.8.8", {"country": "Example"})
+    client = project.app.test_client()
+    response = client.get("/api/history")
+    assert response.status_code == 200
+    assert len(response.json["items"]) == 1
+    item_id = response.json["items"][0]["id"]
+    deleted = client.delete(f"/api/history/{item_id}")
+    assert deleted.status_code == 200 and deleted.json["deleted"] is True
+    assert client.get("/api/history").json["items"] == []

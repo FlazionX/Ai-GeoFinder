@@ -1,4 +1,7 @@
 import io
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PIL import Image
 import pytest
 import app as project
@@ -13,27 +16,24 @@ def make_image(fmt="JPEG", size=(128, 96)):
 
 def test_health_endpoint():
     response = project.app.test_client().get("/api/health")
-    assert response.status_code == 200
-    assert response.json["ok"] is True
+    assert response.status_code == 200 and response.json["ok"] is True
 
 
 def test_home_page():
     response = project.app.test_client().get("/")
     assert response.status_code == 200
-    assert b"AI GEO" in response.data
+    assert b"IP Lookup" in response.data
 
 
 def test_inspect_valid_jpeg():
     result = project.inspect_image(make_image())
-    assert result["format"] == "JPEG"
-    assert result["width"] == 128
-    assert result["height"] == 96
-    assert result["bytes"].startswith(b"\xff\xd8")
+    assert result["format"] == "JPEG" and result["width"] == 128
+    assert result["height"] == 96 and result["bytes"].startswith(b"\\xff\\xd8")
+    assert len(result["sha256"]) == 64
 
 
 def test_inspect_png():
-    result = project.inspect_image(make_image("PNG"))
-    assert result["format"] == "PNG"
+    assert project.inspect_image(make_image("PNG"))["format"] == "PNG"
 
 
 def test_reject_gif():
@@ -47,8 +47,7 @@ def test_reject_tiny_image():
 
 
 def test_analyze_without_file():
-    response = project.app.test_client().post("/api/analyze")
-    assert response.status_code == 400
+    assert project.app.test_client().post("/api/analyze").status_code == 400
 
 
 def test_analyze_without_api_key(monkeypatch):
@@ -57,3 +56,19 @@ def test_analyze_without_api_key(monkeypatch):
     response = project.app.test_client().post("/api/analyze", data=data, content_type="multipart/form-data")
     assert response.status_code == 503
     assert "GEMINI_API_KEY" in response.json["error"]
+
+
+@pytest.mark.parametrize("ip", ["127.0.0.1", "192.168.1.1", "::1", "10.0.0.1", "169.254.1.1"])
+def test_private_ip_blocked(ip):
+    with pytest.raises(ValueError):
+        project.lookup_ip(ip)
+
+
+def test_invalid_ip_rejected():
+    with pytest.raises(ValueError):
+        project.lookup_ip("not-an-ip")
+
+
+def test_ip_endpoint_invalid_input():
+    response = project.app.test_client().post("/api/ip-lookup", json={"ip": "invalid"})
+    assert response.status_code == 400

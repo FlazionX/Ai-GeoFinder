@@ -5,7 +5,7 @@ py -3 -m venv .venv
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pyinstaller --noconfirm --clean --onedir --windowed --name AI-GeoFinder --add-data "templates;templates" --add-data "static;static" app.py
+pyinstaller --noconfirm --clean --onedir --windowed --name AI-GeoFinder --collect-all webview --collect-all bottle --collect-all proxy_tools --hidden-import webview.platforms.edgechromium --add-data "templates;templates" --add-data "static;static" app.py
 if errorlevel 1 (echo BUILD FAILED & pause & exit /b 1)
 echo Build complete: dist\AI-GeoFinder\AI-GeoFinder.exe
 pause

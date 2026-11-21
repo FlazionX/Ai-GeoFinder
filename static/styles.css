@@ -220,3 +220,17 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opa
 .settings-link{font-size:10px;color:#ddd;text-decoration:none}
 .settings-link:hover{color:#fff;text-decoration:underline}
 @media(max-width:520px){.settings-dialog{padding:18px}.settings-actions{align-items:stretch;flex-direction:column-reverse}.settings-actions button{width:100%}.settings-key-row{flex-wrap:wrap}.settings-key-row input{flex-basis:100%}}
+
+/* Dedicated in-app Gemini setup */
+.setup-steps{display:grid;gap:0;margin:22px 0;border-top:1px solid #303030}
+.setup-step{display:grid;grid-template-columns:42px minmax(0,1fr);gap:14px;padding:18px 0;border-bottom:1px solid #303030}
+.setup-number{font:12px 'DM Mono',monospace;color:#aaa;border:1px solid #444;border-radius:7px;width:34px;height:34px;display:grid;place-items:center}
+.setup-step h3{font-size:13px;margin:0 0 7px;color:#eee}
+.setup-step p,.settings-help p{font-size:11px;line-height:1.8;color:#999;margin:0 0 8px}
+.settings-inline-box{padding:18px;background:#101010;border:1px solid #393939;border-radius:10px}
+.settings-inline-box .settings-key-status{min-height:30px}
+.settings-help{margin-top:18px;padding:15px 17px;border-left:2px solid #aaa;background:#151515;border-radius:0 8px 8px 0}
+.settings-help>b{display:block;font-size:11px;margin-bottom:8px;color:#eee}
+.settings-help p:last-child{margin-bottom:0}
+.ai-settings-page{max-width:860px;margin:0 auto}
+@media(max-width:520px){.setup-step{grid-template-columns:34px minmax(0,1fr);gap:10px}.settings-inline-box{padding:13px}}

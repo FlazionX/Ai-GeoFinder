@@ -11,10 +11,11 @@ import re
 import sqlite3
 import sys
 import time
-import webbrowser
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Timer
+from threading import Thread
+from werkzeug.serving import make_server
 
 import requests
 from dotenv import load_dotenv
@@ -282,11 +283,34 @@ def too_large(_error):
 
 
 def run_desktop():
+    """Launch Flask privately and show it inside a native Windows WebView window."""
+    try:
+        import webview
+    except ImportError as exc:
+        raise RuntimeError("Не найден модуль pywebview. Переустановите приложение.") from exc
+
     init_db()
-    port = int(os.getenv("PORT", "5000"))
+    requested_port = int(os.getenv("PORT", "0"))
+    server = make_server("127.0.0.1", requested_port, app, threaded=True)
+    port = server.server_port
+    server_thread = Thread(target=server.serve_forever, name="GeoFinderServer", daemon=True)
+    server_thread.start()
     url = f"http://127.0.0.1:{port}"
-    Timer(1.2, lambda: webbrowser.open(url)).start()
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+
+    try:
+        webview.create_window(
+            "AI GeoFinder",
+            url,
+            width=1480,
+            height=940,
+            min_size=(1024, 680),
+            resizable=True,
+            text_select=True,
+            background_color="#090d12",
+        )
+        webview.start(gui="edgechromium", debug=False)
+    finally:
+        server.shutdown()
 
 
 if __name__ == "__main__":

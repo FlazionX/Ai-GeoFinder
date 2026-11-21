@@ -1,6 +1,12 @@
 # AI GeoFinder 2.0
 
-Desktop-friendly geographic research application with photo intelligence, public-IP lookup, map hypotheses and a local investigation history.
+Native Windows desktop application with a GeoSpy-inspired global map, photo intelligence, public-IP lookup and local investigation history. The EXE opens in its own application window using Microsoft Edge WebView2; it does not open a normal browser tab.
+
+## Desktop interface
+- The world map is the main workspace and opens at a global view.
+- After photo analysis, candidate regions appear as animated map markers; the map automatically frames the candidate areas.
+- The interface runs in a native resizable Windows window through pywebview and Edge WebView2.
+- Windows may require the Microsoft Edge WebView2 Runtime to be installed.
 
 ## Modules
 
@@ -34,7 +40,7 @@ Requires Python 3.11+ and a Gemini API key.
 The app binds only to `127.0.0.1`.
 
 ## Build Windows EXE
-Run `build_windows.bat` on Windows. The distributable folder is `dist/AI-GeoFinder/`; keep the entire folder together. Put your `.env` file next to the EXE.
+Run `build_windows.bat` on Windows. The distributable folder is `dist/AI-GeoFinder/`; keep the entire folder together. Put your `.env` file next to the EXE. The EXE is a native desktop launcher, not a shortcut to Chrome.
 
 GitHub Actions also builds the Windows application on every relevant push to `main` and on manual dispatch. Download the `AI-GeoFinder-Windows` artifact from the successful run under **Actions → Build Windows EXE**.
 

@@ -194,3 +194,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opa
 .world-map .leaflet-tile-pane{filter:grayscale(1) brightness(.96) contrast(1.04)!important}
 .world-map.map-tiles-invert .leaflet-tile-pane{filter:grayscale(1) invert(.9) hue-rotate(180deg) brightness(.82) contrast(1.06)!important}
 .world-map.map-tiles-dark .leaflet-tile-pane{filter:grayscale(1) brightness(.96) contrast(1.04)!important}
+
+
+/* Clean map: remove decorative scanline interference only */
+.map-stage:after{content:none!important;display:none!important;animation:none!important;background:none!important}

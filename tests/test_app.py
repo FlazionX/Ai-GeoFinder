@@ -90,6 +90,7 @@ def test_history_save_and_delete(monkeypatch, tmp_path):
 
 def test_save_and_remove_gemini_key(monkeypatch, tmp_path):
     monkeypatch.setattr(project, "APP_DIR", tmp_path)
+    monkeypatch.setattr(project, "verify_gemini_api_key", lambda key: None)
     client = project.app.test_client()
     response = client.post("/api/settings/gemini", json={"api_key": "AIza" + "x" * 36})
     assert response.status_code == 200
@@ -99,6 +100,35 @@ def test_save_and_remove_gemini_key(monkeypatch, tmp_path):
     removed = client.delete("/api/settings/gemini")
     assert removed.status_code == 200
     assert "GEMINI_API_KEY" not in project.os.environ
+
+
+
+def test_gemini_key_is_not_saved_when_google_rejects_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(project, "APP_DIR", tmp_path)
+    def reject(_key):
+        raise ValueError("Google отклонил ключ (API_KEY_INVALID).")
+    monkeypatch.setattr(project, "verify_gemini_api_key", reject)
+    response = project.app.test_client().post(
+        "/api/settings/gemini", json={"api_key": "AQ." + "x" * 40}
+    )
+    assert response.status_code == 400
+    assert "API_KEY_INVALID" in response.json["error"]
+    assert not (tmp_path / ".env").exists()
+
+
+def test_verify_gemini_key_uses_native_api_key_header(monkeypatch):
+    captured = {}
+    class FakeResponse:
+        status_code = 200
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeResponse()
+    monkeypatch.setattr(project.SESSION, "post", fake_post)
+    project.verify_gemini_api_key("AQ." + "x" * 40)
+    assert "generativelanguage.googleapis.com" in captured["url"]
+    assert captured["headers"]["x-goog-api-key"] == "AQ." + "x" * 40
+    assert "Authorization" not in captured["headers"]
 
 
 def test_reject_invalid_gemini_key():

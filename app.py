@@ -139,6 +139,14 @@ def geocode_candidate(candidate: dict) -> dict:
     return {**candidate, "map_match": None}
 
 
+def get_gemini_api_key() -> str:
+    """Ignore template placeholders so the UI never reports a fake configured key."""
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    if key.lower() in {"your_gemini_api_key_here", "your_api_key_here", "your_key", "replace_me"}:
+        return ""
+    return key
+
+
 def get_gemini_model() -> str:
     """Return a supported model and transparently migrate the retired default."""
     configured = os.getenv("GEMINI_MODEL", "").strip()
@@ -157,9 +165,9 @@ def get_gemini_model() -> str:
 
 
 def analyze_with_gemini(image_bytes: bytes, deep_scan: bool = False) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    api_key = get_gemini_api_key()
     if not api_key:
-        raise RuntimeError("Добавьте GEMINI_API_KEY в раздел «Настройка ИИ», чтобы включить анализ.")
+        raise RuntimeError("Добавьте действительный Gemini API-ключ в раздел «Настройка ИИ», чтобы включить анализ.")
     model = get_gemini_model()
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     depth = ("Perform a deeper multi-pass style reasoning: compare competing regions, identify supporting and contradicting clues, "
@@ -235,7 +243,7 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "ai_configured": bool(os.getenv("GEMINI_API_KEY", "").strip())})
+    return jsonify({"ok": True, "ai_configured": bool(get_gemini_api_key())})
 
 
 @app.post("/api/settings/gemini")

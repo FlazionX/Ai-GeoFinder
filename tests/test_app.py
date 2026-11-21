@@ -56,7 +56,7 @@ def test_analyze_without_api_key(monkeypatch):
     data = {"image": (io.BytesIO(make_image()), "test.jpg")}
     response = project.app.test_client().post("/api/analyze", data=data, content_type="multipart/form-data")
     assert response.status_code == 503
-    assert "GEMINI_API_KEY" in response.json["error"]
+    assert "API-ключ" in response.json["error"]
 
 
 @pytest.mark.parametrize("ip", ["127.0.0.1", "192.168.1.1", "::1", "10.0.0.1", "169.254.1.1"])

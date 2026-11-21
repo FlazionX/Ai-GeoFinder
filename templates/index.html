@@ -53,8 +53,8 @@
 <p class="section-intro">Чтобы AI GeoFinder мог анализировать фотографии, подключи Google Gemini. Это делается один раз — ключ сохранится на твоём компьютере.</p>
 <div class="setup-steps">
 <article class="setup-step"><span class="setup-number">01</span><div><h3>Открой Google AI Studio</h3><p>Перейди на официальный сайт Google, где создаются ключи доступа к Gemini.</p><a class="settings-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Открыть Google AI Studio ↗</a></div></article>
-<article class="setup-step"><span class="setup-number">02</span><div><h3>Создай API-ключ</h3><p>Войди в Google-аккаунт, нажми <b>Create API key</b> и выбери проект Google Cloud, если сайт попросит. Скопируй созданный ключ.</p></div></article>
-<article class="setup-step"><span class="setup-number">03</span><div><h3>Вставь ключ сюда</h3><p>Вернись в AI GeoFinder и вставь скопированный ключ в поле ниже. Нажми «Сохранить ключ».</p></div></article></div>
+<article class="setup-step"><span class="setup-number">02</span><div><h3>Создай API-ключ</h3><p>Войди в Google-аккаунт, нажми <b>Create API key</b> и выбери проект Google Cloud, если сайт попросит. Скопируй созданный ключ. Если настраиваешь ограничения вручную, разреши Generative Language API.</p></div></article>
+<article class="setup-step"><span class="setup-number">03</span><div><h3>Вставь ключ сюда</h3><p>Вернись в AI GeoFinder и вставь скопированный ключ в поле ниже. Нажми «Сохранить ключ». Программа сначала проверит ключ настоящим запросом к Gemini и сохранит его только при успешной проверке.</p></div></article></div>
 <div class="settings-inline-box"><label class="settings-label" for="geminiKeyInput">GEMINI API KEY</label>
 <div class="settings-key-row"><input id="geminiKeyInput" type="password" placeholder="Вставь сюда ключ из Google AI Studio" autocomplete="off" spellcheck="false"><button class="small-btn" id="toggleKeyVisibility" type="button">Показать</button></div>
 <div class="settings-key-status" id="geminiKeyStatus">Проверяем настройки…</div>

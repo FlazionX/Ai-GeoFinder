@@ -1,4 +1,5 @@
 import io
+import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -103,3 +104,67 @@ def test_save_and_remove_gemini_key(monkeypatch, tmp_path):
 def test_reject_invalid_gemini_key():
     response = project.app.test_client().post("/api/settings/gemini", json={"api_key": "short"})
     assert response.status_code == 400
+
+
+
+def test_reject_image_over_pixel_limit(monkeypatch):
+    monkeypatch.setattr(project, "MAX_IMAGE_PIXELS", 1000)
+    with pytest.raises(ValueError, match="40 мегапикселей"):
+        project.inspect_image(make_image(size=(40, 40)))
+
+
+def test_delete_history_when_database_does_not_exist(monkeypatch, tmp_path):
+    monkeypatch.setattr(project, "DB_PATH", tmp_path / "new-history.sqlite3")
+    response = project.app.test_client().delete("/api/history/123")
+    assert response.status_code == 200
+    assert response.json == {"deleted": False}
+
+
+def test_legacy_gemini_model_is_migrated_and_used(monkeypatch, tmp_path):
+    monkeypatch.setattr(project, "APP_DIR", tmp_path)
+    (tmp_path / ".env").write_text("GEMINI_MODEL=gemini-2.5-flash\\n", encoding="utf-8")
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza" + "x" * 36)
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": json.dumps({
+                "summary": "Проверочный ответ",
+                "country_candidates": [],
+                "visual_clues": [],
+                "limitations": [],
+                "report": ""
+            })}]}}]}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr(project.SESSION, "post", fake_post)
+    monkeypatch.setattr(project, "geocode_candidate", lambda item: item)
+    result = project.analyze_with_gemini(make_image())
+    assert "models/gemini-3.8-flash:generateContent" in captured["url"]
+    assert captured["headers"]["x-goog-api-key"] == "AIza" + "x" * 36
+    assert project.os.environ["GEMINI_MODEL"] == "gemini-3.8-flash"
+    assert "GEMINI_MODEL=gemini-3.8-flash" in (tmp_path / ".env").read_text(encoding="utf-8")
+    assert result["summary"] == "Проверочный ответ"
+
+
+def test_gemini_api_error_is_reported(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza" + "x" * 36)
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+    class FakeResponse:
+        status_code = 404
+        text = "not found"
+
+        def json(self):
+            return {"error": {"message": "model not found"}}
+
+    monkeypatch.setattr(project.SESSION, "post", lambda *args, **kwargs: FakeResponse())
+    with pytest.raises(RuntimeError, match="Gemini API \\(404\\): model not found"):
+        project.analyze_with_gemini(make_image())

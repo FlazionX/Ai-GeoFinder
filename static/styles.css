@@ -186,3 +186,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opa
 .world-map .leaflet-bar a:hover{background:#292929;color:#fff}
 .world-map .leaflet-tooltip{background:#111;color:#eee;border:1px solid #555;box-shadow:0 3px 14px #0009}
 .world-map .leaflet-tooltip:before{border-right-color:#555;border-left-color:#555}
+
+
+/* Keep the map clean: no scan overlays, grid or decorative tile noise */
+.map-stage:after{display:none!important}
+.world-map{filter:none!important}
+.world-map .leaflet-tile-pane{filter:grayscale(1) brightness(.96) contrast(1.04)!important}
+.world-map.map-tiles-invert .leaflet-tile-pane{filter:grayscale(1) invert(.9) hue-rotate(180deg) brightness(.82) contrast(1.06)!important}
+.world-map.map-tiles-dark .leaflet-tile-pane{filter:grayscale(1) brightness(.96) contrast(1.04)!important}

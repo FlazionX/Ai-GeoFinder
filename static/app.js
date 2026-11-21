@@ -31,3 +31,10 @@ async function loadHistory(){const root=$("historyList");root.replaceChildren();
 $("refreshHistory").addEventListener("click",loadHistory);
 fetch("/api/health").then(r=>r.json()).then(data=>{$("apiStatus").textContent=data.ai_configured?"ИИ готов к работе":"Нужен API-ключ";$("apiStatus").previousElementSibling.style.background=data.ai_configured?"#c7f36b":"#e6a64d"}).catch(()=>{$("apiStatus").textContent="Сервер активен"});
 $("settingsBtn").addEventListener("click",()=>toast("Ключ Gemini задаётся в .env рядом с программой"));
+
+
+// Map workspace tools: reset globe and immersive fullscreen view.
+const mapResetBtn=$("mapResetBtn"),mapExpandBtn=$("mapExpandBtn");
+if(mapResetBtn)mapResetBtn.addEventListener("click",()=>{if(!photoMap)return;photoMap.flyTo([22,8],2,{duration:1.1});toast("Обзор мира восстановлен")});
+if(mapExpandBtn)mapExpandBtn.addEventListener("click",async()=>{const stage=document.querySelector(".map-stage");if(!stage)return;try{if(!document.fullscreenElement&&stage.requestFullscreen){await stage.requestFullscreen();mapExpandBtn.textContent="⤢";mapExpandBtn.title="Свернуть карту"}else if(document.fullscreenElement){await document.exitFullscreen()}}catch(e){toast("Полный экран недоступен в этом режиме") }setTimeout(()=>photoMap&&photoMap.invalidateSize(),180)});
+document.addEventListener("fullscreenchange",()=>{if(mapExpandBtn){const on=!!document.fullscreenElement;mapExpandBtn.textContent=on?"⤢":"⛶";mapExpandBtn.title=on?"Свернуть карту":"Развернуть карту"}setTimeout(()=>photoMap&&photoMap.invalidateSize(),160)});

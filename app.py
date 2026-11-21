@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from contextlib import contextmanager
 import io
 import ipaddress
 import json
@@ -32,10 +33,14 @@ app = Flask(__name__, template_folder=str(RESOURCE_DIR / "templates"), static_fo
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD
 
 
+@contextmanager
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def init_db():

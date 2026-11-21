@@ -24,7 +24,7 @@ from PIL import Image, UnidentifiedImageError
 
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-load_dotenv(APP_DIR / ".env")
+load_dotenv(APP_DIR / ".env", override=True)  # The key saved in the app settings must take precedence over stale Windows environment variables.
 DB_PATH = APP_DIR / "geofinder_history.sqlite3"
 MAX_UPLOAD = 12 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
@@ -246,20 +246,57 @@ def health():
     return jsonify({"ok": True, "ai_configured": bool(get_gemini_api_key())})
 
 
+def verify_gemini_api_key(api_key: str) -> None:
+    """Verify the exact model call used by the app before persisting a key."""
+    model = get_gemini_model()
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    response = SESSION.post(
+        endpoint,
+        headers={"x-goog-api-key": api_key},
+        json={"contents": [{"parts": [{"text": "Reply with OK only."}]}],
+              "generationConfig": {"temperature": 0, "maxOutputTokens": 8}},
+        timeout=25,
+    )
+    if response.status_code >= 400:
+        try:
+            error = response.json().get("error", {})
+            message = str(error.get("message", response.text))
+            details = error.get("details", [])
+            reasons = [str(item.get("reason")) for item in details if isinstance(item, dict) and item.get("reason")]
+        except (ValueError, AttributeError, TypeError):
+            message, reasons = response.text, []
+        lowered = " ".join(reasons + [message]).lower()
+        if response.status_code == 400 and ("api_key_invalid" in lowered or "api key not valid" in lowered):
+            raise ValueError("Google отклонил ключ (API_KEY_INVALID). Создай ключ именно в Google AI Studio, скопируй его полностью и проверь, что он активен.")
+        if response.status_code == 403 or "api_key_service_blocked" in lowered:
+            raise ValueError("Ключ распознан, но доступ к Gemini API заблокирован. В Google Cloud Console открой API и сервисы → Учётные данные → твой ключ → Ограничения API и разреши Generative Language API (generativelanguage.googleapis.com).")
+        if response.status_code == 401:
+            raise ValueError("Google не принял авторизацию ключа. Проверь, что это ключ Gemini API из Google AI Studio, а не OAuth-токен или ключ другого API.")
+        if response.status_code == 404:
+            raise RuntimeError(f"Модель {model} недоступна для этого проекта: {message[:220]}")
+        raise RuntimeError(f"Проверка Gemini не пройдена ({response.status_code}): {message[:300]}")
+
+
 @app.post("/api/settings/gemini")
 def save_gemini_settings():
-    """Store the user's Gemini key locally beside the app; never return the key."""
+    """Validate the key against Gemini before storing it locally; never return the key."""
     payload = request.get_json(silent=True) or {}
-    api_key = str(payload.get("api_key", "")).strip()
+    api_key = str(payload.get("api_key", "")).strip().strip('"').strip("'")
     if len(api_key) < 20 or len(api_key) > 512 or any(ch.isspace() for ch in api_key):
-        return jsonify({"error": "Проверь API-ключ. Он должен содержать не менее 20 символов без пробелов."}), 400
+        return jsonify({"error": "Проверь API-ключ. Вставь его полностью, без пробелов, кавычек и переносов строк."}), 400
+    try:
+        verify_gemini_api_key(api_key)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 502
     env_path = APP_DIR / ".env"
     try:
         set_key(str(env_path), "GEMINI_API_KEY", api_key, quote_mode="never")
         os.environ["GEMINI_API_KEY"] = api_key
-        return jsonify({"ok": True, "configured": True, "message": "API-ключ сохранён на этом компьютере."})
+        return jsonify({"ok": True, "configured": True, "message": "Ключ проверен Google и сохранён на этом компьютере."})
     except OSError:
-        return jsonify({"error": "Не удалось сохранить .env. Проверь права на запись в папку программы."}), 500
+        return jsonify({"error": "Ключ прошёл проверку, но не удалось сохранить .env. Проверь права на запись в папку программы."}), 500
 
 
 @app.delete("/api/settings/gemini")

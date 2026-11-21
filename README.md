@@ -1,48 +1,63 @@
-# AI GeoFinder
+# AI GeoFinder 2.0
 
-AI GeoFinder — desktop-friendly web application that analyzes an uploaded photograph and suggests broad possible geographic regions using Google Gemini.
+Desktop-friendly geographic research application with photo intelligence, public-IP lookup, map hypotheses and a local investigation history.
 
-## Features
-- Dark responsive interface with drag-and-drop image upload and preview.
-- JPG, PNG and WEBP validation; 12 MB upload limit.
-- Gemini visual analysis of architecture, landscape, vegetation and other visible clues.
-- Multiple country/region hypotheses with heuristic confidence scores.
-- EXIF GPS is detected only as a metadata-presence flag. GPS coordinates are never shown or sent to Gemini.
-- Local-only Flask server bound to 127.0.0.1.
-- Windows build through PyInstaller and GitHub Actions.
+## Modules
 
-## Requirements
-- Python 3.11 or newer
-- A Gemini API key from Google AI Studio
+### Photo Intelligence
+- JPG, PNG and WEBP upload with drag-and-drop preview (12 MB maximum).
+- Optional crop selection with mouse or touch.
+- Gemini visual reasoning for public landmarks, architecture, signs, road markings, vegetation and terrain.
+- Deep Scan asks Gemini for a deeper comparison of competing regions, supporting/contradicting clues and a longer report.
+- Candidate regions are looked up through OpenStreetMap Nominatim. Map markers are approximate region/country matches, not the photo's verified location.
+- Image metadata panel: pixel dimensions, format, file size, SHA-256, camera make/model, capture date and whether GPS metadata exists. GPS coordinates are deliberately not displayed or sent to Gemini.
 
-## Run on Windows
-1. Download or clone this repository.
-2. Double-click `start.bat`.
-3. Open `.env` and paste your key after `GEMINI_API_KEY=`.
-4. Run `start.bat` again. The app opens in your browser.
+### IP Lookup
+- IPv4 and IPv6 validation.
+- Rejects private, loopback, link-local, multicast and reserved IP addresses.
+- Public IP lookup returns country, region, city, postal code, ISP, organization, ASN, timezone and approximate coordinates when available.
+- Results are mapped and saved to local history.
+- IP data comes from ipwho.is. IP geolocation normally identifies an ISP network/exit node, not the exact device or person.
 
-## Build EXE locally
-Run `build_windows.bat`. The application will be created in `dist/AI-GeoFinder/`. Keep the complete folder together; the EXE uses bundled templates and static assets.
+### Investigation History
+- Recent photo and IP lookups are stored in a local SQLite database beside the app.
+- View and delete individual history entries.
 
-## GitHub Actions build
-Every push to `main` that changes app files, or a manually started workflow, builds the Windows application on a Windows runner and uploads `AI-GeoFinder-Windows` as a downloadable workflow artifact. Open **Actions → Build Windows EXE → latest successful run → Artifacts**.
+## Setup
+Requires Python 3.11+ and a Gemini API key.
+
+1. Download/clone the repository.
+2. Run `start.bat`.
+3. Open `.env` and set `GEMINI_API_KEY=your_key`.
+4. Restart `start.bat`.
+
+The app binds only to `127.0.0.1`.
+
+## Build Windows EXE
+Run `build_windows.bat` on Windows. The distributable folder is `dist/AI-GeoFinder/`; keep the entire folder together. Put your `.env` file next to the EXE.
+
+GitHub Actions also builds the Windows application on every relevant push to `main` and on manual dispatch. Download the `AI-GeoFinder-Windows` artifact from the successful run under **Actions → Build Windows EXE**.
+
+## Tests
+```powershell
+pip install -r requirements.txt
+pip install pytest
+pytest -q
+```
 
 ## Configuration
-Create a `.env` file:
-
 ```env
 GEMINI_API_KEY=your_key
 GEMINI_MODEL=gemini-2.5-flash
 PORT=5000
 ```
+Never commit a real API key. The `.env` file is ignored by Git.
 
-Never commit your real API key. The repository ignores `.env`.
-
-## Tests
-```powershell
-pip install pytest
-pytest -q
-```
-
-## Important limitations and privacy
-This tool produces broad visual hypotheses, not verified geolocation. Confidence values are heuristic scores, not statistical probabilities. It must not be used to identify a private person's exact whereabouts or a private residence. Do not treat visual clues such as shadows as reliable proof of a specific time or place. Uploaded image pixels are sent to Google Gemini when analysis is requested; review Google's API terms and privacy settings before use. EXIF GPS coordinates are not included in the AI request.
+## Privacy and limitations
+- Image pixels are sent to Google Gemini only when the user presses Analyze. Review Google's API terms before use.
+- The app reads only non-coordinate EXIF fields for the metadata panel. GPS coordinates are not exposed or transmitted to the AI.
+- Photo results are broad visual hypotheses, not verified geolocation. Confidence is heuristic, not a statistical probability.
+- The app must not be used to identify a private person's whereabouts or pinpoint a private residence.
+- IP geolocation is approximate and may be inaccurate, especially with VPNs, mobile networks, proxies and corporate gateways.
+- IP address lookups are sent to ipwho.is. Map tiles/geocoding use OpenStreetMap services.
+- Internet access is required for Gemini, IP lookup, geocoding and map tiles.

@@ -31,7 +31,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
       - name: Run tests
-        run: pytest -q
+        run: python -m pytest -q
       - name: Build Windows application
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name AI-GeoFinder --add-data "templates;templates" --add-data "static;static" app.py

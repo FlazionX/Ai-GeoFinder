@@ -51,12 +51,12 @@ def test_analyze_without_file():
     assert project.app.test_client().post("/api/analyze").status_code == 400
 
 
-def test_analyze_without_api_key(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_analyze_without_local_ollama(monkeypatch):
+    monkeypatch.setattr(project, "local_ai_status", lambda: {"available": False, "installed": False, "model": "qwen2.5vl:3b"})
     data = {"image": (io.BytesIO(make_image()), "test.jpg")}
     response = project.app.test_client().post("/api/analyze", data=data, content_type="multipart/form-data")
     assert response.status_code == 503
-    assert "API-ключ" in response.json["error"]
+    assert "Ollama" in response.json["error"]
 
 
 @pytest.mark.parametrize("ip", ["127.0.0.1", "192.168.1.1", "::1", "10.0.0.1", "169.254.1.1"])
@@ -216,3 +216,44 @@ def test_example_gemini_key_is_not_marked_configured(monkeypatch):
     assert response.status_code == 200
     assert response.json["ai_configured"] is False
     assert project.get_gemini_api_key() == ""
+
+
+
+def test_local_ai_status_endpoint(monkeypatch):
+    monkeypatch.setattr(project, "local_ai_status", lambda: {"available": True, "installed": True, "model": "qwen2.5vl:3b"})
+    response = project.app.test_client().get("/api/local-ai/status")
+    assert response.status_code == 200
+    assert response.json["installed"] is True
+
+
+def test_local_model_analysis_sends_image_and_parses_json(monkeypatch):
+    monkeypatch.setattr(project, "local_ai_status", lambda: {"available": True, "installed": True, "model": "qwen2.5vl:3b"})
+    captured = {}
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"message": {"content": json.dumps({
+                "summary": "Похоже на горный регион.",
+                "country_candidates": [{"country": "Example", "region": "North", "confidence": 40}],
+                "visual_clues": ["Горы"], "limitations": ["Мало признаков"], "report": "Тест"
+            }, ensure_ascii=False)}}
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeResponse()
+    monkeypatch.setattr(project.SESSION, "post", fake_post)
+    monkeypatch.setattr(project, "geocode_candidate", lambda item: item)
+    result = project.analyze_with_local_model(make_image())
+    assert captured["url"].endswith("/api/chat")
+    assert captured["json"]["model"] == "qwen2.5vl:3b"
+    assert captured["json"]["stream"] is False
+    assert captured["json"]["messages"][0]["images"]
+    assert result["engine"] == "local"
+    assert result["summary"] == "Похоже на горный регион."
+
+
+def test_local_model_missing_is_actionable(monkeypatch):
+    monkeypatch.setattr(project, "local_ai_status", lambda: {"available": True, "installed": False, "model": "qwen2.5vl:3b"})
+    with pytest.raises(RuntimeError, match="Загрузить локальную модель"):
+        project.analyze_with_local_model(make_image())

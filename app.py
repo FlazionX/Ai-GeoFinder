@@ -557,15 +557,42 @@ def too_large(_error):
 
 
 class DesktopBridge:
-    """Native dialogs exposed to the desktop WebView."""
-    window = None
+    """Native Windows folder picker isolated from the WebView GUI process."""
 
     def choose_model_folder(self):
-        if self.window is None:
-            return None
-        import webview
-        selected = self.window.create_file_dialog(webview.FOLDER_DIALOG, allow_multiple=False)
-        return selected[0] if selected else None
+        if sys.platform != "win32":
+            return ""
+        import subprocess
+
+        # Use a separate STA PowerShell process so a native dialog failure
+        # cannot terminate the PyWebView window or its Edge WebView runtime.
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$dialog.Description = 'Выбери папку для хранения нейросети'; "
+            "$dialog.ShowNewFolderButton = $true; "
+            "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+            "{ [Console]::Write($dialog.SelectedPath) }"
+        )
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-STA", "-EncodedCommand", encoded],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Диалог выбора папки не ответил. Попробуй ещё раз.")
+        except OSError as exc:
+            raise RuntimeError("Не удалось запустить системный диалог Windows.") from exc
+
+        if result.returncode != 0:
+            detail = (result.stderr or "").strip()
+            raise RuntimeError(detail[:240] or "Windows не смогла открыть выбор папки.")
+        return (result.stdout or "").strip()
 
 
 def run_desktop():

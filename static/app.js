@@ -73,12 +73,10 @@ async function loadModelStorage(){
   catch(e){if(label)label.textContent="Не удалось прочитать путь хранения."}
 }
 const browseStorageBtn=$("browseModelStorage");
-if(browseStorageBtn)browseStorageBtn.addEventListener("click",async()=>{
-  try{
-    if(!window.pywebview||!window.pywebview.api||!window.pywebview.api.choose_model_folder){$("modelStorageStatus").textContent="Выбор папки доступен в EXE-версии приложения.";return}
-    const path=await window.pywebview.api.choose_model_folder();
-    if(path){$("modelStoragePath").value=path;$("modelStorageStatus").textContent="Папка выбрана. Нажми «Сохранить папку»."}
-  }catch(e){$("modelStorageStatus").textContent="Не удалось открыть диалог выбора папки."}
+if(browseStorageBtn)browseStorageBtn.addEventListener("click",()=>{
+  const input=$("modelStoragePath");
+  if(input){input.focus();input.select()}
+  $("modelStorageStatus").textContent="Введи полный путь вручную, например D:\\AI-Models, затем нажми «Сохранить папку».";
 });
 const saveStorageBtn=$("saveModelStorage");
 if(saveStorageBtn)saveStorageBtn.addEventListener("click",async()=>{

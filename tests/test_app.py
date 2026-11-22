@@ -103,17 +103,22 @@ def test_save_and_remove_gemini_key(monkeypatch, tmp_path):
 
 
 
-def test_gemini_key_is_not_saved_when_google_rejects_it(monkeypatch, tmp_path):
+def test_gemini_key_is_saved_even_when_google_rejects_it(monkeypatch, tmp_path):
     monkeypatch.setattr(project, "APP_DIR", tmp_path)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     def reject(_key):
         raise ValueError("Google отклонил ключ (API_KEY_INVALID).")
     monkeypatch.setattr(project, "verify_gemini_api_key", reject)
+    api_key = "AQ." + "x" * 40
     response = project.app.test_client().post(
-        "/api/settings/gemini", json={"api_key": "AQ." + "x" * 40}
+        "/api/settings/gemini", json={"api_key": api_key}
     )
-    assert response.status_code == 400
-    assert "API_KEY_INVALID" in response.json["error"]
-    assert not (tmp_path / ".env").exists()
+    assert response.status_code == 200
+    assert response.json["configured"] is True
+    assert response.json["verified"] is False
+    assert "API_KEY_INVALID" in response.json["warning"]
+    assert "GEMINI_API_KEY" in (tmp_path / ".env").read_text(encoding="utf-8")
+    assert project.get_gemini_api_key() == api_key
 
 
 def test_verify_gemini_key_uses_native_api_key_header(monkeypatch):

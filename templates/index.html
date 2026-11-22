@@ -54,6 +54,12 @@
 <div class="local-ai-card">
   <div class="local-ai-top"><div><span class="local-ai-kicker">VISION MODEL</span><h3>Qwen2.5-VL 3B</h3><p>Локальная модель для понимания изображений · загрузка около 3,2 ГБ</p></div><span class="local-ai-state" id="localAiState">Проверка…</span></div>
   <div class="local-ai-status" id="localAiStatus">Проверяем Ollama на этом компьютере…</div>
+  <div class="model-storage">
+    <label class="settings-label" for="modelStoragePath">ПАПКА ДЛЯ ХРАНЕНИЯ НЕЙРОСЕТИ</label>
+    <div class="model-storage-row"><input id="modelStoragePath" type="text" placeholder="Например: D:/AI-Models" spellcheck="false"><button class="small-btn" id="browseModelStorage" type="button">Обзор…</button></div>
+    <div class="model-storage-actions"><button class="small-btn" id="saveModelStorage" type="button">Сохранить папку</button><span id="modelStorageStatus">Загружаем текущий путь…</span></div>
+    <p class="local-ai-footnote">После смены папки полностью закрой Ollama через значок в системном трее и запусти её снова. Новая папка применяется к последующим загрузкам.</p>
+  </div>
   <div class="local-ai-actions"><button class="small-btn" id="checkLocalAi" type="button">Проверить подключение</button><button class="primary-btn" id="pullLocalAi" type="button"><span>Загрузить локальную модель</span><b>↓</b></button></div>
   <div class="local-ai-progress" id="localAiProgress" hidden><span></span></div>
   <p class="local-ai-footnote">Нужна установленная программа Ollama версии 0.7.0 или новее. Сначала установи её, запусти, затем нажми «Проверить подключение». Модель скачивается один раз; после этого анализ работает без интернета (карта и геокодирование по-прежнему используют сеть).</p>

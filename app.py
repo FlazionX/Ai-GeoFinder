@@ -164,12 +164,26 @@ def get_gemini_model() -> str:
     return model
 
 
+def interaction_output_text(data: dict) -> str:
+    """Extract model text from the REST Interactions API response."""
+    chunks = []
+    for step in data.get("steps", []):
+        if not isinstance(step, dict) or step.get("type") != "model_output":
+            continue
+        for part in step.get("content", []):
+            if isinstance(part, dict) and part.get("type") == "text":
+                chunks.append(str(part.get("text", "")))
+    if not chunks:
+        raise RuntimeError("Gemini не вернул текстовый результат. Попробуйте ещё раз.")
+    return "\n".join(chunks).strip()
+
+
 def analyze_with_gemini(image_bytes: bytes, deep_scan: bool = False) -> dict:
     api_key = get_gemini_api_key()
     if not api_key:
         raise RuntimeError("Добавьте действительный Gemini API-ключ в раздел «Настройка ИИ», чтобы включить анализ.")
     model = get_gemini_model()
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    endpoint = "https://generativelanguage.googleapis.com/v1beta/interactions"
     depth = ("Perform a deeper multi-pass style reasoning: compare competing regions, identify supporting and contradicting clues, "
              "give up to 5 broad candidate regions, and provide a detailed report.") if deep_scan else (
              "Perform a focused first-pass analysis and provide up to 3 broad candidate regions.")
@@ -182,11 +196,15 @@ Use visible public landmarks, architecture, signs, road markings, vegetation and
 Do not invent a landmark, coordinates, exact address, private residence, person's identity or whereabouts.
 Do not infer a person's location. If evidence is weak, state that clearly.
 Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
-    payload = {"contents": [{"parts": [
-        {"text": prompt},
-        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode("ascii")}}
-    ]}], "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
-    response = SESSION.post(endpoint, headers={"x-goog-api-key": api_key}, json=payload, timeout=100)
+    payload = {"model": model, "input": [
+        {"type": "text", "text": prompt},
+        {"type": "image", "data": base64.b64encode(image_bytes).decode("ascii"), "mime_type": "image/jpeg"}
+    ]}
+    response = SESSION.post(endpoint, headers={
+        "x-goog-api-key": api_key,
+        "Api-Revision": "2026-05-20",
+        "Content-Type": "application/json"
+    }, json=payload, timeout=100)
     if response.status_code >= 400:
         try:
             message = response.json().get("error", {}).get("message", response.text)
@@ -194,7 +212,8 @@ Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
             message = response.text
         raise RuntimeError(f"Ошибка Gemini API ({response.status_code}): {message[:450]}")
     try:
-        result = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        data = response.json()
+        result = interaction_output_text(data)
         parsed = json.loads(result)
         if not isinstance(parsed, dict):
             raise ValueError()
@@ -204,7 +223,6 @@ Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
         return parsed
     except (KeyError, IndexError, ValueError, TypeError) as exc:
         raise RuntimeError("ИИ вернул ответ в неожиданном формате. Попробуйте другое изображение.") from exc
-
 
 def lookup_ip(value: str) -> dict:
     value = value.strip()
@@ -247,16 +265,21 @@ def health():
 
 
 def verify_gemini_api_key(api_key: str) -> None:
-    """Verify the exact model call used by the app before persisting a key."""
+    """Verify the key using Google's current Interactions API before saving it."""
     model = get_gemini_model()
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    response = SESSION.post(
-        endpoint,
-        headers={"x-goog-api-key": api_key},
-        json={"contents": [{"parts": [{"text": "Reply with OK only."}]}],
-              "generationConfig": {"temperature": 0, "maxOutputTokens": 8}},
-        timeout=25,
-    )
+    endpoint = "https://generativelanguage.googleapis.com/v1beta/interactions"
+    try:
+        response = SESSION.post(
+            endpoint,
+            headers={"x-goog-api-key": api_key, "Api-Revision": "2026-05-20",
+                     "Content-Type": "application/json"},
+            json={"model": model, "input": "Reply with OK only."},
+            timeout=12,
+        )
+    except requests.Timeout as exc:
+        raise RuntimeError("Проверка ключа заняла слишком много времени. Проверь интернет и повтори попытку.") from exc
+    except requests.RequestException as exc:
+        raise RuntimeError("Не удалось связаться с Google Gemini. Проверь интернет и повтори попытку.") from exc
     if response.status_code >= 400:
         try:
             error = response.json().get("error", {})
@@ -266,16 +289,21 @@ def verify_gemini_api_key(api_key: str) -> None:
         except (ValueError, AttributeError, TypeError):
             message, reasons = response.text, []
         lowered = " ".join(reasons + [message]).lower()
-        if response.status_code == 400 and ("api_key_invalid" in lowered or "api key not valid" in lowered):
-            raise ValueError("Google отклонил ключ (API_KEY_INVALID). Создай ключ именно в Google AI Studio, скопируй его полностью и проверь, что он активен.")
+        if "api_key_invalid" in lowered or "api key not valid" in lowered:
+            raise ValueError("Google отклонил ключ (API_KEY_INVALID). Убедись, что скопирован полный ключ из AI Studio. Если ключ начинается с AQ., он должен использоваться через Interactions API; приложение теперь проверяет именно этот интерфейс.")
         if response.status_code == 403 or "api_key_service_blocked" in lowered:
-            raise ValueError("Ключ распознан, но доступ к Gemini API заблокирован. В Google Cloud Console открой API и сервисы → Учётные данные → твой ключ → Ограничения API и разреши Generative Language API (generativelanguage.googleapis.com).")
-        if response.status_code == 401:
-            raise ValueError("Google не принял авторизацию ключа. Проверь, что это ключ Gemini API из Google AI Studio, а не OAuth-токен или ключ другого API.")
+            raise ValueError("Google распознал ключ, но запретил доступ к Gemini API. Проверь настройки проекта и ограничения ключа в Google AI Studio.")
+        if response.status_code in (401,):
+            raise ValueError("Google не принял этот тип авторизации. Создай новый ключ через Google AI Studio → API Keys и используй именно его.")
         if response.status_code == 404:
-            raise RuntimeError(f"Модель {model} недоступна для этого проекта: {message[:220]}")
+            raise RuntimeError(f"Модель {model} или Interactions API недоступны этому проекту: {message[:220]}")
         raise RuntimeError(f"Проверка Gemini не пройдена ({response.status_code}): {message[:300]}")
-
+    try:
+        data = response.json()
+        if data.get("status") not in {"completed", "in_progress", "queued"}:
+            raise ValueError()
+    except (ValueError, AttributeError):
+        raise RuntimeError("Google получил ключ, но вернул неожиданный ответ при проверке. Попробуй ещё раз.")
 
 @app.post("/api/settings/gemini")
 def save_gemini_settings():

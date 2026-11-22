@@ -556,45 +556,6 @@ def too_large(_error):
     return jsonify({"error": "Файл больше 12 МБ."}), 413
 
 
-class DesktopBridge:
-    """Native Windows folder picker isolated from the WebView GUI process."""
-
-    def choose_model_folder(self):
-        if sys.platform != "win32":
-            return ""
-        import subprocess
-
-        # Use a separate STA PowerShell process so a native dialog failure
-        # cannot terminate the PyWebView window or its Edge WebView runtime.
-        script = (
-            "Add-Type -AssemblyName System.Windows.Forms; "
-            "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; "
-            "$dialog.Description = 'Выбери папку для хранения нейросети'; "
-            "$dialog.ShowNewFolderButton = $true; "
-            "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
-            "{ [Console]::Write($dialog.SelectedPath) }"
-        )
-        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-        try:
-            result = subprocess.run(
-                ["powershell.exe", "-NoProfile", "-STA", "-EncodedCommand", encoded],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("Диалог выбора папки не ответил. Попробуй ещё раз.")
-        except OSError as exc:
-            raise RuntimeError("Не удалось запустить системный диалог Windows.") from exc
-
-        if result.returncode != 0:
-            detail = (result.stderr or "").strip()
-            raise RuntimeError(detail[:240] or "Windows не смогла открыть выбор папки.")
-        return (result.stdout or "").strip()
-
-
 def run_desktop():
     """Launch Flask privately and show it inside a native Windows WebView window."""
     try:
@@ -611,11 +572,9 @@ def run_desktop():
     url = f"http://127.0.0.1:{port}"
 
     try:
-        bridge = DesktopBridge()
         window = webview.create_window(
             "AI GeoFinder",
             url,
-            js_api=bridge,
             width=1480,
             height=940,
             min_size=(1024, 680),
@@ -623,7 +582,6 @@ def run_desktop():
             text_select=True,
             background_color="#090d12",
         )
-        bridge.window = window
         webview.start(gui="edgechromium", debug=False)
     finally:
         server.shutdown()

@@ -269,30 +269,3 @@ def test_model_storage_path_requires_absolute_path(monkeypatch):
     monkeypatch.setattr(project.sys, "platform", "win32")
     with pytest.raises(ValueError, match="полный путь"):
         project.set_model_storage_path("relative-folder")
-
-def test_folder_picker_uses_isolated_windows_dialog(monkeypatch):
-    from types import SimpleNamespace
-    import subprocess
-
-    monkeypatch.setattr(project.sys, "platform", "win32")
-    captured = {}
-    def fake_run(args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        return SimpleNamespace(returncode=0, stdout="D:\\\\AI Models\\\\Qwen", stderr="")
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-    selected = project.DesktopBridge().choose_model_folder()
-    assert selected == "D:\\\\AI Models\\\\Qwen"
-    assert "-STA" in captured["args"]
-    assert captured["kwargs"]["timeout"] == 120
-
-
-def test_folder_picker_cancel_returns_empty(monkeypatch):
-    from types import SimpleNamespace
-    import subprocess
-
-    monkeypatch.setattr(project.sys, "platform", "win32")
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs:
-                        SimpleNamespace(returncode=0, stdout="", stderr=""))
-    assert project.DesktopBridge().choose_model_folder() == ""

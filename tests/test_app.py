@@ -120,13 +120,15 @@ def test_verify_gemini_key_uses_native_api_key_header(monkeypatch):
     captured = {}
     class FakeResponse:
         status_code = 200
+        def json(self):
+            return {"status": "completed"}
     def fake_post(url, **kwargs):
         captured["url"] = url
         captured.update(kwargs)
         return FakeResponse()
     monkeypatch.setattr(project.SESSION, "post", fake_post)
     project.verify_gemini_api_key("AQ." + "x" * 40)
-    assert "generativelanguage.googleapis.com" in captured["url"]
+    assert captured["url"].endswith("/v1beta/interactions")
     assert captured["headers"]["x-goog-api-key"] == "AQ." + "x" * 40
     assert "Authorization" not in captured["headers"]
 
@@ -161,13 +163,13 @@ def test_legacy_gemini_model_is_migrated_and_used(monkeypatch, tmp_path):
         status_code = 200
 
         def json(self):
-            return {"candidates": [{"content": {"parts": [{"text": json.dumps({
+            return {"status": "completed", "steps": [{"type": "model_output", "content": [{"type": "text", "text": json.dumps({
                 "summary": "Проверочный ответ",
                 "country_candidates": [],
                 "visual_clues": [],
                 "limitations": [],
                 "report": ""
-            })}]}}]}
+            })}]}]}
 
     def fake_post(url, **kwargs):
         captured["url"] = url
@@ -177,7 +179,9 @@ def test_legacy_gemini_model_is_migrated_and_used(monkeypatch, tmp_path):
     monkeypatch.setattr(project.SESSION, "post", fake_post)
     monkeypatch.setattr(project, "geocode_candidate", lambda item: item)
     result = project.analyze_with_gemini(make_image())
-    assert "models/gemini-3.8-flash:generateContent" in captured["url"]
+    assert captured["url"].endswith("/v1beta/interactions")
+    assert captured["json"]["model"] == "gemini-3.8-flash"
+    assert captured["headers"]["Api-Revision"] == "2026-05-20"
     assert captured["headers"]["x-goog-api-key"] == "AIza" + "x" * 36
     assert project.os.environ["GEMINI_MODEL"] == "gemini-3.8-flash"
     assert "GEMINI_MODEL=gemini-3.8-flash" in (tmp_path / ".env").read_text(encoding="utf-8")

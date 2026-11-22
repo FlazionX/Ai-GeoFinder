@@ -307,24 +307,32 @@ def verify_gemini_api_key(api_key: str) -> None:
 
 @app.post("/api/settings/gemini")
 def save_gemini_settings():
-    """Validate the key against Gemini before storing it locally; never return the key."""
+    """Persist the key locally first; a temporary/Google validation failure must not discard it."""
     payload = request.get_json(silent=True) or {}
     api_key = str(payload.get("api_key", "")).strip().strip('"').strip("'")
     if len(api_key) < 20 or len(api_key) > 512 or any(ch.isspace() for ch in api_key):
         return jsonify({"error": "Проверь API-ключ. Вставь его полностью, без пробелов, кавычек и переносов строк."}), 400
-    try:
-        verify_gemini_api_key(api_key)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 502
+
     env_path = APP_DIR / ".env"
     try:
-        set_key(str(env_path), "GEMINI_API_KEY", api_key, quote_mode="never")
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        set_key(str(env_path), "GEMINI_API_KEY", api_key, quote_mode="always")
+        load_dotenv(env_path, override=True)
+        if get_gemini_api_key() != api_key:
+            raise OSError("Не удалось подтвердить запись ключа в .env.")
         os.environ["GEMINI_API_KEY"] = api_key
-        return jsonify({"ok": True, "configured": True, "message": "Ключ проверен Google и сохранён на этом компьютере."})
-    except OSError:
-        return jsonify({"error": "Ключ прошёл проверку, но не удалось сохранить .env. Проверь права на запись в папку программы."}), 500
+    except (OSError, PermissionError) as exc:
+        return jsonify({"error": f"Не удалось сохранить ключ в {env_path}. Закрой программу и запусти её из папки, где есть права на запись. Детали: {str(exc)[:160]}"}), 500
+
+    # Keep the saved key even when Google rejects it or is temporarily unreachable.
+    try:
+        verify_gemini_api_key(api_key)
+        return jsonify({"ok": True, "configured": True, "verified": True,
+                        "message": "Ключ сохранён и проверен Google."})
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"ok": True, "configured": True, "verified": False,
+                        "message": "Ключ сохранён на компьютере, но Google пока не подтвердил подключение.",
+                        "warning": str(exc)[:350]})
 
 
 @app.delete("/api/settings/gemini")

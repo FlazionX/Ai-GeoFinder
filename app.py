@@ -224,6 +224,73 @@ Do not use or request EXIF/GPS metadata. Avoid exact/private locations."""
     except (KeyError, IndexError, ValueError, TypeError) as exc:
         raise RuntimeError("ИИ вернул ответ в неожиданном формате. Попробуйте другое изображение.") from exc
 
+
+# Local-first vision AI powered by Ollama. No cloud API key is required.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+LOCAL_VISION_MODEL = os.getenv("LOCAL_VISION_MODEL", "qwen2.5vl:3b")
+
+
+def local_ai_status() -> dict:
+    try:
+        response = SESSION.get(f"{OLLAMA_HOST}/api/tags", timeout=2.5)
+        response.raise_for_status()
+        models = response.json().get("models", [])
+        installed = any(str(item.get("name", "")).split(":")[0] == LOCAL_VISION_MODEL.split(":")[0]
+                        and (":" not in LOCAL_VISION_MODEL or str(item.get("name", "")).endswith(LOCAL_VISION_MODEL.split(":", 1)[1]))
+                        for item in models if isinstance(item, dict))
+        return {"available": True, "installed": installed, "model": LOCAL_VISION_MODEL,
+                "host": OLLAMA_HOST, "message": "Локальная нейросеть готова." if installed else "Ollama запущен. Нужно загрузить модель."}
+    except (requests.RequestException, ValueError, TypeError):
+        return {"available": False, "installed": False, "model": LOCAL_VISION_MODEL,
+                "host": OLLAMA_HOST, "message": "Ollama не найден. Установи и запусти Ollama для Windows."}
+
+
+def analyze_with_local_model(image_bytes: bytes, deep_scan: bool = False) -> dict:
+    status = local_ai_status()
+    if not status["available"]:
+        raise RuntimeError("Локальная нейросеть не запущена. Установи Ollama для Windows, запусти его и нажми «Проверить подключение».")
+    if not status["installed"]:
+        raise RuntimeError(f"Модель {LOCAL_VISION_MODEL} ещё не загружена. Открой «Настройка ИИ» и нажми «Загрузить локальную модель» (около 3 ГБ).")
+    depth = ("Сделай углублённое сравнение конкурирующих регионов, найди подтверждающие и противоречащие признаки, предложи до 5 широких регионов и подробный отчёт."
+             if deep_scan else "Сделай первичный анализ и предложи до 3 широких возможных регионов.")
+    prompt = f"""Ты — осторожная система визуального географического анализа. {depth}
+Верни ТОЛЬКО корректный JSON со следующими ключами:
+summary (одно короткое предложение), country_candidates (массив объектов country, region, confidence, clues, counter_clues),
+visual_clues (массив строк), limitations (массив строк), report (строка).
+confidence — эвристическая оценка от 0 до 100, НЕ статистическая вероятность.
+Используй только видимые публичные ориентиры, архитектуру, надписи, дорожную разметку, растительность и рельеф.
+Не выдумывай ориентиры, координаты, точный адрес, частное жильё, личность или местонахождение человека.
+Не делай выводов о местонахождении человека. Если признаков мало — прямо скажи об этом.
+Не используй EXIF/GPS и не пытайся определить точное или частное местоположение."""
+    payload = {"model": LOCAL_VISION_MODEL, "messages": [{"role": "user", "content": prompt,
+                "images": [base64.b64encode(image_bytes).decode("ascii")]}],
+               "stream": False, "format": "json", "keep_alive": "10m",
+               "options": {"temperature": 0.2, "num_ctx": 4096}}
+    try:
+        response = SESSION.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=(10, 240))
+        response.raise_for_status()
+        raw = response.json().get("message", {}).get("content", "")
+    except requests.Timeout as exc:
+        raise RuntimeError("Локальная нейросеть отвечает слишком долго. Попробуй ещё раз или отключи Deep Scan.") from exc
+    except requests.RequestException as exc:
+        raise RuntimeError("Не удалось связаться с Ollama. Убедись, что Ollama запущен на этом компьютере.") from exc
+    try:
+        raw = str(raw).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^\\```(?:json)?\\s*|\\s*\\```$", "", raw, flags=re.IGNORECASE)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError()
+        candidates = parsed.get("country_candidates", [])
+        parsed["country_candidates"] = [geocode_candidate(x) for x in candidates[:5] if isinstance(x, dict)]
+        parsed["deep_scan"] = deep_scan
+        parsed["engine"] = "local"
+        parsed["model"] = LOCAL_VISION_MODEL
+        return parsed
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise RuntimeError("Локальная нейросеть вернула ответ в неожиданном формате. Повтори анализ.") from exc
+
+
 def lookup_ip(value: str) -> dict:
     value = value.strip()
     try:
@@ -261,7 +328,7 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "ai_configured": bool(get_gemini_api_key())})
+    return jsonify({"ok": True, "ai_configured": bool(get_gemini_api_key()), "local_ai": local_ai_status()})
 
 
 def verify_gemini_api_key(api_key: str) -> None:
@@ -304,6 +371,31 @@ def verify_gemini_api_key(api_key: str) -> None:
             raise ValueError()
     except (ValueError, AttributeError):
         raise RuntimeError("Google получил ключ, но вернул неожиданный ответ при проверке. Попробуй ещё раз.")
+
+@app.get("/api/local-ai/status")
+def local_ai_status_endpoint():
+    return jsonify(local_ai_status())
+
+
+@app.post("/api/local-ai/pull")
+def pull_local_ai_model():
+    status = local_ai_status()
+    if not status["available"]:
+        return jsonify({"error": "Ollama не запущен. Сначала установи и запусти Ollama для Windows."}), 503
+    if status["installed"]:
+        return jsonify({"ok": True, "installed": True, "message": "Модель уже загружена."})
+    try:
+        response = SESSION.post(f"{OLLAMA_HOST}/api/pull", json={"name": LOCAL_VISION_MODEL, "stream": False}, timeout=(10, 1800))
+        response.raise_for_status()
+        data = response.json()
+        if data.get("status") != "success":
+            raise RuntimeError(str(data.get("error") or data.get("status") or "Загрузка модели не завершена.")[:250])
+        return jsonify({"ok": True, "installed": True, "message": f"Модель {LOCAL_VISION_MODEL} загружена."})
+    except requests.Timeout:
+        return jsonify({"error": "Загрузка модели превысила лимит ожидания. Проверь Ollama — загрузка могла продолжиться в фоне."}), 504
+    except (requests.RequestException, ValueError, RuntimeError) as exc:
+        return jsonify({"error": f"Не удалось загрузить модель: {str(exc)[:300]}"}), 502
+
 
 @app.post("/api/settings/gemini")
 def save_gemini_settings():
@@ -363,12 +455,12 @@ def analyze():
     try:
         checked = inspect_image(original_data)
         analysis_checked = inspect_image(analysis_data)
-        result = analyze_with_gemini(analysis_checked["bytes"], deep_scan)
+        result = analyze_with_local_model(analysis_checked["bytes"], deep_scan)
         response_data = {"result": result, "image": {
             "width": checked["width"], "height": checked["height"],
             "format": checked["format"], "size_bytes": checked["size_bytes"],
             "sha256": checked["sha256"], "metadata": checked["metadata"]},
-            "notice": "Это географические гипотезы по визуальным признакам, а не подтверждённая геолокация."}
+            "notice": "Анализ выполнен локальной нейросетью на этом компьютере. Это географические гипотезы по визуальным признакам, а не подтверждённая геолокация."}
         save_history("photo", uploaded.filename, response_data)
         return jsonify(response_data)
     except ValueError as exc:

@@ -230,6 +230,36 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 LOCAL_VISION_MODEL = os.getenv("LOCAL_VISION_MODEL", "qwen2.5vl:3b")
 
 
+def get_model_storage_path() -> str:
+    configured = os.getenv("OLLAMA_MODELS", "").strip()
+    if configured:
+        return configured
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                return str(winreg.QueryValueEx(key, "OLLAMA_MODELS")[0])
+        except (OSError, ImportError):
+            pass
+    return str(Path.home() / ".ollama" / "models")
+
+
+def set_model_storage_path(path: str) -> str:
+    if sys.platform != "win32":
+        raise RuntimeError("Выбор папки хранения через приложение поддерживается в Windows.")
+    target = Path(path).expanduser()
+    if not target.is_absolute():
+        raise ValueError("Укажи полный путь к папке.")
+    target.mkdir(parents=True, exist_ok=True)
+    if not target.is_dir():
+        raise ValueError("Выбранный путь не является папкой.")
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, "OLLAMA_MODELS", 0, winreg.REG_EXPAND_SZ, str(target))
+    os.environ["OLLAMA_MODELS"] = str(target)
+    return str(target)
+
+
 def local_ai_status() -> dict:
     try:
         response = SESSION.get(f"{OLLAMA_HOST}/api/tags", timeout=2.5)
@@ -239,7 +269,7 @@ def local_ai_status() -> dict:
                         and (":" not in LOCAL_VISION_MODEL or str(item.get("name", "")).endswith(LOCAL_VISION_MODEL.split(":", 1)[1]))
                         for item in models if isinstance(item, dict))
         return {"available": True, "installed": installed, "model": LOCAL_VISION_MODEL,
-                "host": OLLAMA_HOST, "message": "Локальная нейросеть готова." if installed else "Ollama запущен. Нужно загрузить модель."}
+                "host": OLLAMA_HOST, "storage_path": get_model_storage_path(), "message": "Локальная нейросеть готова." if installed else "Ollama запущен. Нужно загрузить модель."}
     except (requests.RequestException, ValueError, TypeError):
         return {"available": False, "installed": False, "model": LOCAL_VISION_MODEL,
                 "host": OLLAMA_HOST, "message": "Ollama не найден. Установи и запусти Ollama для Windows."}
@@ -378,6 +408,25 @@ def local_ai_status_endpoint():
     return jsonify(local_ai_status())
 
 
+@app.get("/api/local-ai/storage")
+def local_ai_storage():
+    return jsonify({"path": get_model_storage_path()})
+
+
+@app.post("/api/local-ai/storage")
+def update_local_ai_storage():
+    payload = request.get_json(silent=True) or {}
+    path = str(payload.get("path", "")).strip()
+    if not path or len(path) > 1000:
+        return jsonify({"error": "Выбери папку для хранения модели."}), 400
+    try:
+        selected = set_model_storage_path(path)
+        return jsonify({"ok": True, "path": selected, "restart_required": True,
+                        "message": "Папка сохранена. Полностью закрой Ollama через значок в системном трее и запусти её снова. Только после перезапуска новые загрузки пойдут в выбранную папку."})
+    except (OSError, ValueError, RuntimeError, ImportError) as exc:
+        return jsonify({"error": str(exc)[:300]}), 400
+
+
 @app.post("/api/local-ai/pull")
 def pull_local_ai_model():
     status = local_ai_status()
@@ -507,6 +556,18 @@ def too_large(_error):
     return jsonify({"error": "Файл больше 12 МБ."}), 413
 
 
+class DesktopBridge:
+    """Native dialogs exposed to the desktop WebView."""
+    window = None
+
+    def choose_model_folder(self):
+        if self.window is None:
+            return None
+        import webview
+        selected = self.window.create_file_dialog(webview.FOLDER_DIALOG, allow_multiple=False)
+        return selected[0] if selected else None
+
+
 def run_desktop():
     """Launch Flask privately and show it inside a native Windows WebView window."""
     try:
@@ -523,9 +584,11 @@ def run_desktop():
     url = f"http://127.0.0.1:{port}"
 
     try:
-        webview.create_window(
+        bridge = DesktopBridge()
+        window = webview.create_window(
             "AI GeoFinder",
             url,
+            js_api=bridge,
             width=1480,
             height=940,
             min_size=(1024, 680),
@@ -533,6 +596,7 @@ def run_desktop():
             text_select=True,
             background_color="#090d12",
         )
+        bridge.window = window
         webview.start(gui="edgechromium", debug=False)
     finally:
         server.shutdown()

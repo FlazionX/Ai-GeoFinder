@@ -257,3 +257,15 @@ def test_local_model_missing_is_actionable(monkeypatch):
     monkeypatch.setattr(project, "local_ai_status", lambda: {"available": True, "installed": False, "model": "qwen2.5vl:3b"})
     with pytest.raises(RuntimeError, match="Загрузить локальную модель"):
         project.analyze_with_local_model(make_image())
+
+
+
+def test_model_storage_api_rejects_empty_path():
+    response = project.app.test_client().post("/api/local-ai/storage", json={"path": ""})
+    assert response.status_code == 400
+
+
+def test_model_storage_path_requires_absolute_path(monkeypatch):
+    monkeypatch.setattr(project.sys, "platform", "win32")
+    with pytest.raises(ValueError, match="полный путь"):
+        project.set_model_storage_path("relative-folder")

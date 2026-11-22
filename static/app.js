@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let selectedFile=null, objectUrl=null, croppedBlob=null, cropMode=false, cropStart=null, cropSelection=null, photoMap=null, ipMap=null, photoMarkers=[], worldTileLayer=null, worldTileFallback=false, leafletFallbackStarted=false, offlineMapActive=false;
 function toast(message){const el=$("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2600)}
-function switchTab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));document.querySelectorAll(".tab-page").forEach(p=>{const on=p.id==="page-"+name;p.hidden=!on;p.classList.toggle("active",on)});if(name==="history")loadHistory();if(name==="photo"&&photoMap)setTimeout(()=>photoMap.invalidateSize(),120);if(name==="ip"&&ipMap)setTimeout(()=>ipMap.invalidateSize(),80)}
+function switchTab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));document.querySelectorAll(".tab-page").forEach(p=>{const on=p.id==="page-"+name;p.hidden=!on;p.classList.toggle("active",on)});if(name==="history")loadHistory();if(name==="settings"&&typeof checkLocalAi==="function")checkLocalAi();if(name==="photo"&&photoMap)setTimeout(()=>photoMap.invalidateSize(),120);if(name==="ip"&&ipMap)setTimeout(()=>ipMap.invalidateSize(),80)}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
 const input=$("fileInput"),zone=$("dropzone"),preview=$("preview");
 document.addEventListener("DOMContentLoaded",()=>{if(window.L)initWorldMap();else loadLeafletFallback()});
@@ -33,7 +33,7 @@ $("ipBtn").addEventListener("click",async()=>{const ip=$("ipInput").value.trim()
 $("ipInput").addEventListener("keydown",e=>{if(e.key==="Enter")$("ipBtn").click()});
 async function loadHistory(){const root=$("historyList");root.replaceChildren();try{const response=await fetch("/api/history"),data=await response.json();if(!data.items.length){root.textContent="Пока нет сохранённых исследований.";return}data.items.forEach(item=>{const row=document.createElement("div");row.className="history-row";const details=document.createElement("div");const title=document.createElement("strong");title.textContent=(item.kind==="ip"?"IP · ":"PHOTO · ")+item.title;const date=document.createElement("span");date.textContent=new Date(item.created_at).toLocaleString();details.append(title,date);const del=document.createElement("button");del.className="small-btn";del.textContent="Удалить";del.addEventListener("click",async()=>{try{const response=await fetch("/api/history/"+item.id,{method:"DELETE"});if(!response.ok)throw new Error();await loadHistory()}catch(e){toast("Не удалось удалить запись из истории")}});row.append(details,del);root.append(row)})}catch(e){root.textContent="Не удалось загрузить историю."}}
 $("refreshHistory").addEventListener("click",loadHistory);
-fetch("/api/health").then(r=>r.json()).then(data=>{$("apiStatus").textContent=data.ai_configured?"ИИ готов к работе":"Нужен API-ключ";$("apiStatus").previousElementSibling.style.background=data.ai_configured?"#c7f36b":"#e6a64d"}).catch(()=>{$("apiStatus").textContent="Сервер активен"});
+fetch("/api/local-ai/status").then(r=>r.json()).then(updateLocalAiUi).catch(()=>{$("apiStatus").textContent="Локальный ИИ недоступен"});
 const geminiKeyInput=$("geminiKeyInput"),geminiKeyStatus=$("geminiKeyStatus");
 function refreshAiStatus(configured){$("apiStatus").textContent=configured?"ИИ готов к работе":"Нужен API-ключ";$("apiStatus").previousElementSibling.style.background=configured?"#f2f2f2":"#e6a64d";geminiKeyStatus.textContent=configured?"Ключ Gemini сохранён на этом компьютере.":"API-ключ не настроен. Выполни шаги выше."}
 async function checkGeminiSettings(){try{const r=await fetch("/api/health"),d=await r.json();refreshAiStatus(!!d.ai_configured)}catch(e){geminiKeyStatus.textContent="Не удалось проверить настройки."}}
@@ -51,3 +51,31 @@ if(mapExpandBtn)mapExpandBtn.addEventListener("click",async()=>{const stage=docu
 document.addEventListener("fullscreenchange",()=>{if(mapExpandBtn){const on=!!document.fullscreenElement;mapExpandBtn.textContent=on?"⤢":"⛶";mapExpandBtn.title=on?"Свернуть карту":"Развернуть карту"}setTimeout(()=>photoMap&&photoMap.invalidateSize(),160)});
 
 const exportReportBtn=$("exportReportBtn");if(exportReportBtn)exportReportBtn.addEventListener("click",exportAnalysisReport);
+
+
+// Local-first Ollama vision model controls.
+function updateLocalAiUi(data){
+  const ready=!!(data&&data.available&&data.installed);
+  const state=$("localAiState"),status=$("localAiStatus"),pull=$("pullLocalAi");
+  if(state){state.textContent=ready?"ГОТОВА":data&&data.available?"МОДЕЛЬ НЕ УСТАНОВЛЕНА":"OLLAMA НЕ НАЙДЕН";state.classList.toggle("ready",ready)}
+  if(status)status.textContent=data&&data.message?data.message:"Не удалось проверить локальную нейросеть.";
+  if(pull){pull.disabled=!!(data&&data.installed);pull.querySelector("span").textContent=data&&data.installed?"Модель загружена":"Загрузить локальную модель"}
+  const top=$("apiStatus");if(top){top.textContent=ready?"Локальный ИИ готов":data&&data.available?"Нужно загрузить модель":"Нужно установить Ollama";top.previousElementSibling.style.background=ready?"#f2f2f2":"#e6a64d"}
+}
+async function checkLocalAi(){
+  const status=$("localAiStatus");if(status)status.textContent="Проверяем Ollama и наличие модели…";
+  try{const r=await fetch("/api/local-ai/status");const d=await r.json();updateLocalAiUi(d);return d}
+  catch(e){updateLocalAiUi({available:false,installed:false,message:"Не удалось связаться с локальным сервером приложения."});return null}
+}
+const checkLocalBtn=$("checkLocalAi");if(checkLocalBtn)checkLocalBtn.addEventListener("click",checkLocalAi);
+const pullLocalBtn=$("pullLocalAi");if(pullLocalBtn)pullLocalBtn.addEventListener("click",async()=>{
+  if(pullLocalBtn.disabled)return;
+  if(!confirm("Загрузить Qwen2.5-VL 3B? Потребуется скачать около 3,2 ГБ данных."))return;
+  pullLocalBtn.disabled=true;const progress=$("localAiProgress");if(progress)progress.hidden=false;
+  $("localAiStatus").textContent="Загружаем модель из Ollama. Это может занять некоторое время — не закрывай программу…";
+  try{const r=await fetch("/api/local-ai/pull",{method:"POST"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Не удалось загрузить модель.");
+    toast("Локальная нейросеть установлена.");await checkLocalAi();
+  }catch(e){$("localAiStatus").textContent=e.message||"Ошибка загрузки модели."}
+  finally{if(progress)progress.hidden=true;pullLocalBtn.disabled=false;await checkLocalAi()}
+});
+checkLocalAi();

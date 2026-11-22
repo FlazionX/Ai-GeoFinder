@@ -67,10 +67,32 @@ async function checkLocalAi(){
   try{const r=await fetch("/api/local-ai/status");const d=await r.json();updateLocalAiUi(d);return d}
   catch(e){updateLocalAiUi({available:false,installed:false,message:"Не удалось связаться с локальным сервером приложения."});return null}
 }
+async function loadModelStorage(){
+  const input=$("modelStoragePath"),label=$("modelStorageStatus");if(!input)return;
+  try{const r=await fetch("/api/local-ai/storage"),d=await r.json();if(d.path)input.value=d.path;if(label)label.textContent="Текущий путь: "+(d.path||"стандартная папка Ollama")}
+  catch(e){if(label)label.textContent="Не удалось прочитать путь хранения."}
+}
+const browseStorageBtn=$("browseModelStorage");
+if(browseStorageBtn)browseStorageBtn.addEventListener("click",async()=>{
+  try{
+    if(!window.pywebview||!window.pywebview.api||!window.pywebview.api.choose_model_folder){$("modelStorageStatus").textContent="Выбор папки доступен в EXE-версии приложения.";return}
+    const path=await window.pywebview.api.choose_model_folder();
+    if(path){$("modelStoragePath").value=path;$("modelStorageStatus").textContent="Папка выбрана. Нажми «Сохранить папку»."}
+  }catch(e){$("modelStorageStatus").textContent="Не удалось открыть диалог выбора папки."}
+});
+const saveStorageBtn=$("saveModelStorage");
+if(saveStorageBtn)saveStorageBtn.addEventListener("click",async()=>{
+  const path=$("modelStoragePath").value.trim();if(!path){$("modelStorageStatus").textContent="Сначала выбери папку.";return}
+  saveStorageBtn.disabled=true;$("modelStorageStatus").textContent="Сохраняем путь…";
+  try{const r=await fetch("/api/local-ai/storage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Не удалось сохранить папку.");$("modelStoragePath").value=d.path;$("modelStorageStatus").textContent=d.message||"Путь сохранён. Перезапусти Ollama."}
+  catch(e){$("modelStorageStatus").textContent=e.message||"Ошибка сохранения папки."}
+  finally{saveStorageBtn.disabled=false}
+});
+loadModelStorage();
 const checkLocalBtn=$("checkLocalAi");if(checkLocalBtn)checkLocalBtn.addEventListener("click",checkLocalAi);
 const pullLocalBtn=$("pullLocalAi");if(pullLocalBtn)pullLocalBtn.addEventListener("click",async()=>{
   if(pullLocalBtn.disabled)return;
-  if(!confirm("Загрузить Qwen2.5-VL 3B? Потребуется скачать около 3,2 ГБ данных."))return;
+  if(!confirm("Загрузить Qwen2.5-VL 3B в выбранную папку? Потребуется скачать около 3,2 ГБ. Если ты только что сменил папку, сначала перезапусти Ollama."))return;
   pullLocalBtn.disabled=true;const progress=$("localAiProgress");if(progress)progress.hidden=false;
   $("localAiStatus").textContent="Загружаем модель из Ollama. Это может занять некоторое время — не закрывай программу…";
   try{const r=await fetch("/api/local-ai/pull",{method:"POST"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Не удалось загрузить модель.");

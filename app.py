@@ -277,7 +277,8 @@ confidence — эвристическая оценка от 0 до 100, НЕ с�
     try:
         raw = str(raw).strip()
         if raw.startswith("```"):
-            raw = re.sub(r"^\\```(?:json)?\\s*|\\s*\\```$", "", raw, flags=re.IGNORECASE)
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            raw = raw.rsplit("```", 1)[0].strip()
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             raise ValueError()

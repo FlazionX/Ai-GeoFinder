@@ -29,7 +29,7 @@
 <div class="tool-row"><label class="toggle"><input type="checkbox" id="deepScan"><span></span><b>Deep Scan</b></label><span class="micro">Углублённое сравнение регионов</span></div>
 <div class="crop-tools"><button class="small-btn" id="cropBtn" disabled>Выделить область</button><button class="small-btn" id="resetCrop" disabled>Сбросить обрезку</button></div>
 <button class="primary-btn" id="analyzeBtn" disabled><span>Анализировать фото</span><b>↗</b></button>
-<p class="privacy-note">Изображение отправляется в Gemini только после нажатия кнопки анализа. EXIF GPS не передаётся ИИ и не отображается.</p></div>
+<p class="privacy-note">Фото анализируется локальной нейросетью на этом компьютере. EXIF GPS не передаётся ИИ и не отображается.</p></div>
 <div class="panel result-panel"><div class="panel-head"><div><span class="step">02</span><h2>Результат анализа</h2></div><span class="live-tag"><i></i> AI ENGINE</span></div>
 <div class="empty-state" id="emptyState"><div class="radar"><span></span><span></span><span></span><b>◎</b></div><strong>Ожидает изображение</strong><p>Загрузи фото и запусти анализ</p></div>
 <div class="loading-state" id="loadingState" hidden><div class="loader"></div><strong>Изучаем визуальные признаки</strong><p>Сравниваем архитектуру, ландшафт и ориентиры…</p></div>
@@ -49,17 +49,28 @@
 <p class="privacy-note">IP-запрос передаётся сервису ipwho.is. Результат приблизительный и обычно указывает на сеть/узел провайдера, а не точное положение устройства. Частные и локальные IP блокируются.</p></div></section>
 <section class="tab-page" id="page-history" hidden><div class="panel"><div class="panel-head"><div><span class="step">03</span><h2>История исследований</h2></div><button class="small-btn" id="refreshHistory">Обновить</button></div><div id="historyList" class="history-list"><div class="empty-state compact"><strong>Загружаем историю…</strong></div></div></div></section>
 <section class="tab-page" id="page-settings" hidden>
-<div class="panel ai-settings-page"><div class="panel-head"><div><span class="step">04</span><h2>Подключение ИИ</h2></div><span class="live-tag"><i></i> GEMINI API</span></div>
-<p class="section-intro">Чтобы AI GeoFinder мог анализировать фотографии, подключи Google Gemini. Это делается один раз — ключ сохранится на твоём компьютере.</p>
+<div class="panel ai-settings-page"><div class="panel-head"><div><span class="step">04</span><h2>Локальная нейросеть</h2></div><span class="live-tag"><i></i> LOCAL AI</span></div>
+<p class="section-intro">Основной движок теперь работает прямо на твоём компьютере. Для анализа фото не нужен API-ключ, а изображения не отправляются в облачную нейросеть.</p>
+<div class="local-ai-card">
+  <div class="local-ai-top"><div><span class="local-ai-kicker">VISION MODEL</span><h3>Qwen2.5-VL 3B</h3><p>Локальная модель для понимания изображений · загрузка около 3,2 ГБ</p></div><span class="local-ai-state" id="localAiState">Проверка…</span></div>
+  <div class="local-ai-status" id="localAiStatus">Проверяем Ollama на этом компьютере…</div>
+  <div class="local-ai-actions"><button class="small-btn" id="checkLocalAi" type="button">Проверить подключение</button><button class="primary-btn" id="pullLocalAi" type="button"><span>Загрузить локальную модель</span><b>↓</b></button></div>
+  <div class="local-ai-progress" id="localAiProgress" hidden><span></span></div>
+  <p class="local-ai-footnote">Нужна установленная программа Ollama версии 0.7.0 или новее. Сначала установи её, запусти, затем нажми «Проверить подключение». Модель скачивается один раз; после этого анализ работает без интернета (карта и геокодирование по-прежнему используют сеть).</p>
+  <a class="settings-link" href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">Скачать Ollama для Windows ↗</a>
+</div>
+<div class="settings-help"><b>Как это работает</b><p>Фото анализируется локально через Qwen2.5-VL 3B. При первом запуске модели требуется интернет и около 3,2 ГБ свободного места. После загрузки можно анализировать фотографии без Gemini и без API-ключа.</p><p><b>Важно:</b> локальная модель может ошибаться. Она предлагает вероятные страны и регионы по видимым признакам, а не определяет точные координаты.</p></div>
+<div class="panel-head gemini-optional-head"><div><span class="step">OPTIONAL</span><h2>Дополнительно: Gemini API</h2></div><span class="live-tag">НЕ ОБЯЗАТЕЛЬНО</span></div>
+<p class="section-intro">Gemini оставлен как дополнительная настройка. Для обычной работы AI GeoFinder API-ключ не требуется.</p>
 <div class="setup-steps">
 <article class="setup-step"><span class="setup-number">01</span><div><h3>Открой Google AI Studio</h3><p>Перейди на официальный сайт Google, где создаются ключи доступа к Gemini.</p><a class="settings-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Открыть Google AI Studio ↗</a></div></article>
 <article class="setup-step"><span class="setup-number">02</span><div><h3>Создай API-ключ</h3><p>Войди в Google-аккаунт, нажми <b>Create API key</b> и выбери проект Google Cloud, если сайт попросит. Скопируй созданный ключ. Если настраиваешь ограничения вручную, разреши Generative Language API.</p></div></article>
-<article class="setup-step"><span class="setup-number">03</span><div><h3>Вставь ключ сюда</h3><p>Вернись в AI GeoFinder и вставь скопированный ключ в поле ниже. Нажми «Сохранить ключ». Программа сначала проверит ключ настоящим запросом к Gemini и сохранит его только при успешной проверке.</p></div></article></div>
+<article class="setup-step"><span class="setup-number">03</span><div><h3>Вставь ключ сюда</h3><p>Вернись в AI GeoFinder и вставь скопированный ключ в поле ниже. Нажми «Сохранить ключ». Ключ сохраняется локально; Google может отдельно подтвердить или отклонить подключение.</p></div></article></div>
 <div class="settings-inline-box"><label class="settings-label" for="geminiKeyInput">GEMINI API KEY</label>
 <div class="settings-key-row"><input id="geminiKeyInput" type="password" placeholder="Вставь сюда ключ из Google AI Studio" autocomplete="off" spellcheck="false"><button class="small-btn" id="toggleKeyVisibility" type="button">Показать</button></div>
 <div class="settings-key-status" id="geminiKeyStatus">Проверяем настройки…</div>
 <div class="settings-actions"><button class="small-btn" id="removeGeminiKey" type="button">Удалить ключ</button><button class="primary-btn" id="saveGeminiKey" type="button"><span>Сохранить ключ</span><b>↗</b></button></div></div>
-<div class="settings-help"><b>Что будет дальше?</b><p>После сохранения вернись во вкладку «Фотоанализ», загрузи фотографию и нажми «Анализировать фото». Программа отправит изображение в Gemini для поиска общих географических признаков.</p><p><b>Важно:</b> ключ хранится в файле .env рядом с программой. Не отправляй его другим людям и не публикуй на GitHub. Google может устанавливать квоты и условия оплаты для API.</p></div></div></section>
+<div class="settings-help"><b>Что будет дальше?</b><p>После загрузки локальной модели вернись во вкладку «Фотоанализ» и нажми «Анализировать фото». По умолчанию используется локальная нейросеть Ollama.</p><p><b>Важно:</b> ключ хранится в файле .env рядом с программой. Не отправляй его другим людям и не публикуй на GitHub. Google может устанавливать квоты и условия оплаты для API.</p></div></div></section>
 <footer><span>AI GEO FINDER <span class="muted">/ BUILD 2.0</span></span><span>Географические гипотезы, не доказательства</span></footer>
 </main><div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script><script src="{{ url_for('static', filename='app.js') }}"></script>

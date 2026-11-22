@@ -35,7 +35,7 @@ async function loadHistory(){const root=$("historyList");root.replaceChildren();
 $("refreshHistory").addEventListener("click",loadHistory);
 fetch("/api/local-ai/status").then(r=>r.json()).then(updateLocalAiUi).catch(()=>{$("apiStatus").textContent="Локальный ИИ недоступен"});
 const geminiKeyInput=$("geminiKeyInput"),geminiKeyStatus=$("geminiKeyStatus");
-function refreshAiStatus(configured){$("apiStatus").textContent=configured?"ИИ готов к работе":"Нужен API-ключ";$("apiStatus").previousElementSibling.style.background=configured?"#f2f2f2":"#e6a64d";geminiKeyStatus.textContent=configured?"Ключ Gemini сохранён на этом компьютере.":"API-ключ не настроен. Выполни шаги выше."}
+function refreshAiStatus(configured){geminiKeyStatus.textContent=configured?"Дополнительный ключ Gemini сохранён на этом компьютере.":"Gemini API не настроен — для локального фотоанализа он не нужен."}
 async function checkGeminiSettings(){try{const r=await fetch("/api/health"),d=await r.json();refreshAiStatus(!!d.ai_configured)}catch(e){geminiKeyStatus.textContent="Не удалось проверить настройки."}}
 $("settingsBtn").addEventListener("click",()=>{switchTab("settings");checkGeminiSettings();window.scrollTo({top:0,behavior:"smooth"})});
 $("toggleKeyVisibility").addEventListener("click",()=>{const show=geminiKeyInput.type==="password";geminiKeyInput.type=show?"text":"password";$("toggleKeyVisibility").textContent=show?"Скрыть":"Показать"});
